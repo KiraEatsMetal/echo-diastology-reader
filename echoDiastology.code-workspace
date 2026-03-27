@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../../../Projects/EchoDiaTesting/scribe.js-example-esm-browser"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "main-site"
+	}
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Echo Diastology Flowchart Solver</title>
+	<link rel="stylesheet" type="text/css" href="/main-site/css/site.css">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="js/echo-d-math.js" type="module" defer></script>
+</head>
+<body>
+    <h1>Echo Diastology Flowchart Solver V1.1.7</h1>
+    <h2>Enter parameters:</h2>
+
+    <label for="averageEe">average E/e':</label><br>
+    <input type="text" id="averageEe" name="EeAverage"><br>
+    <label for="epSeptal">e' septal (cm/s):</label><br>
+    <input type="text" id="epSeptal" name="epSeptal"><br>
+    <label for="LAVI">LA Vol Index (LAVI):</label><br>
+    <input type="text" id="LAVI" name="LAVI"><br>
+    <label for="epLateral">e' lateral (cm/s):</label><br>
+    <input type="text" id="epLateral" name="epLateral"><br>
+    <label for="TRVelocity">TR velocity (m/s):</label><br>
+    <input type="text" id="TRVelocity" name="TRVelocity"><br>
+    <label for="EA">E/A:</label><br>
+    <input type="text" id="EA" name="EA"><br>
+    <label for="EeSeptal">E/e' septal:</label><br>
+    <input type="text" id="EeSeptal" name="EeSeptal"><br>
+    <label for="EeLateral">E/e' lateral:</label><br>
+    <input type="text" id="EeLateral" name="EeLateral"><br>
+
+    <label for="ImageInput">OCR Image Input:</label><br>
+    <input type="file" id="ImageInput" name="ImageInput"><br>
+    <textarea id="output"></textarea>
+
+    <br><button id="inputButton">Calculate</button><br>
+
+    <div id="warnings">no warnings</div>
+    <div id="output">output</div>
+</body>
+</html>
