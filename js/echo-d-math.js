@@ -176,8 +176,8 @@ imageInputElement.addEventListener("change", async () => {
     ocrStringArray.forEach((entry) => {
         dataLabels.forEach((dataValue) => {
             if (entry.match(new RegExp(dataValue, "i"))) {
-                let foundNumber = findFirstNumberInString(entry);
-                console.log("found " + dataValue, foundNumber);
+                //start number search after the location of the found label 
+                let foundNumber = findFirstNumberInString(entry.slice(entry.search(new RegExp(dataValue, "i"))));
                 if (foundNumber && dataLabelToHTMLIDTranslator[dataValue]) {
                     //found a number for one of the data labels we use
                     document.getElementById(dataLabelToHTMLIDTranslator[dataValue]).value = foundNumber;
