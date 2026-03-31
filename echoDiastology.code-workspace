@@ -2,10 +2,9 @@
 	"folders": [
 		{
 			"path": "."
-		},
-		{
-			"path": "../../../Projects/EchoDiaTesting/scribe.js-example-esm-browser"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "echo-diastology-reader"
+	}
 }

@@ -86,114 +86,166 @@ function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI,
 const imageInputElement = document.getElementById("ImageInput");
 
 //const uploadedImageElement = document.getElementById("UploadedImage");
-const outputElem = document.getElementById("output");
+const outputElem = document.getElementById("OCROutput");
 
 imageInputElement.addEventListener("change", async () => {
+    //exit if no files uploaded
     if (!imageInputElement.files) return;
+    document.getElementById("imageSrc").src = URL.createObjectURL(imageInputElement.files[0]);;
 
-    console.log("recieved image");
-    //const text = await scribe.extractText(imageInputElement.files, ['eng'], 'txt');
-    //console.log(text);
+    console.log("recieved image, starting scan");
     outputElem.value = "Loading...";
-    console.log(outputElem);
-    //console.log("basic text extraction done");
-    console.log("starting advanced");
 
-    // if you want more control (you do), "use `init`, `importFiles`, `recognize`, and `exportData` separately." scribe.js, line 85
+    // if you want more control, "use `init`, `importFiles`, `recognize`, and `exportData` separately." scribe.js, line 85
+    //start ocr engine
     const ocrParams = { anyOk: false, vanillaMode: false, langs: ['eng'] };
     scribe.init({ ocr: true, ocrParams });
+    
+    //import and read files
     console.log(imageInputElement.files);
     await scribe.importFiles(imageInputElement.files);
+
     await scribe.recognize(ocrParams.langs);
     const ocrExport = scribe.exportData('txt');
     console.log(ocrExport);
 
     //string modification
-    const cullCharacters = [`~`,`(`,`)`,` `,`-`,`—`,`–`,`_`,"'",`=`,`+`,`,`,`{`,`}`,`“`,`”`,`»`,`¢`,`‘`,`’`,`!`,`:`,`[`,`]`,`§`,`<`,`>`,`*`,``,``,``,``,``,``]
-
-    //get ocr export as string
+    //get ocr export as string and remove cull characters, which are all useless
     let ocrString = (await ocrExport).valueOf();
-    
-    //remove cull characters, which are all useless
-    for (let i = 0; i < cullCharacters.length; i++) {
-        ocrString = ocrString.replaceAll(cullCharacters[i], "");
-    }
+    const cullCharacters = [`~`,`(`,`)`,` `,`-`,`—`,`–`,`_`,"'",`=`,`+`,`,`,`{`,`}`,`“`,`”`,`»`,`¢`,`‘`,`’`,`!`,`:`,`[`,`]`,`§`,`<`,`>`,`*`,`/`,`\\`,`?`,``,``,``]
+    cullCharacters.forEach((value) => { ocrString = ocrString.replaceAll(value, ""); })
 
     //split into array by newlines
     let ocrStringArray = ocrString.split("\n");
-    //remove \n from original string
-    //ocrString = ocrString.replaceAll("\n", "");
-
-    let modifiedOcrStringArray = new Array();
-    //remove entries that are too short to contain useful data
-    for (let i = 0; i < ocrStringArray.length; i++) {
-        if (ocrStringArray[i].length > 2) {
-            modifiedOcrStringArray.push(ocrStringArray[i]);
-        }
-    }
-    
-    //console.log(ocrString);
     console.log(ocrStringArray);
-    console.log(modifiedOcrStringArray);
-    //console.log(modifiedOcrStringArray.toString());
-    
-    //next: take the modified string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry
-    
-    //things to search for
-    const dataLabels = ["MVE/EMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEVmax", "MVE/A", "LVEF"]
-    const numbersArray = ["1","2","3","4","5","6","7","8","9","0"]
 
-    modifiedOcrStringArray.forEach((currentValue, index) => {
+    //remove entries that are too short to contain useful data
+    ocrStringArray.forEach((value, index) => {if (value.length <= 2) { delete ocrStringArray[index] }})
+    //removing holes in array
+    ocrStringArray = removeArrayHoles(ocrStringArray);
+
+    //next: take the string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry
+    //things to search for
+    const dataLabels = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"]
+
+    ocrStringArray.forEach((currentValue, index) => {
         let hasLabel = false;
         let hasNum = false;
         //search for labels
         dataLabels.forEach((dataValue) => {
-            if (modifiedOcrStringArray[index].toString().match(dataValue)) {
-                hasLabel = true
-            }
-        });
-        //search for numbers
-        numbersArray.forEach((numberValue) => {
-            if (modifiedOcrStringArray[index].toString().match(numberValue)) {
-                hasNum = true
-            }
+            if (currentValue.match(new RegExp(dataValue, "i"))) { hasLabel = true; }
         });
 
+        //search for numbers
+        if (currentValue.match(/\d/)) { hasNum = true }
+
+        //delete if no number or label found
         if (!hasLabel && !hasNum) {
             //we use delete to leave the index values intact and remove the holes delete leaves later
-            delete modifiedOcrStringArray[index]
+            delete ocrStringArray[index];
         }
     })
 
-    console.log(modifiedOcrStringArray);
-
     //removing holes in array
-    for (let i = 0; i < modifiedOcrStringArray.length; i++) {
-        //we are actively changing the array length, break if you exceed it
-        if (i >= modifiedOcrStringArray.length) { break; }
-        //if the array slot has something, skip, else splice out the slot and set i back by 1
-        if (modifiedOcrStringArray[i]) {} else {
-            modifiedOcrStringArray.splice(i, 1);
-            i = i - 1
+    ocrStringArray = removeArrayHoles(ocrStringArray);
+    
+    //display results
+    outputElem.value = ocrStringArray.toString().replaceAll(",", "\n");
+    console.log(ocrStringArray);
+    console.log(outputElem.value);
+
+    //key to match data labels to html input fields by id
+    const dataLabelToHTMLIDTranslator = {        
+        MVESeptal: "epSeptal",
+        MVELateral: "epLateral",
+        MVEEMean: "averageEe",
+        LAVolIndex: "LAVI",
+        TRVelocity: "TRVelocity",
+        MVEA: "EA",   
+        MVEESeptal: "EeSeptal",
+        MVEELateral: "EeLateral",
+    }
+
+    dataLabels.forEach((entry) => {
+        if (dataLabelToHTMLIDTranslator[entry]) {
+            document.getElementById(dataLabelToHTMLIDTranslator[entry]).value = null;
+        }
+    })
+    //find any with both label and value, apply value to matching html input field
+    //per entry, search for each data label. if found, look for a number. if found, set that number as the matching html element's value.
+    ocrStringArray.forEach((entry) => {
+        dataLabels.forEach((dataValue) => {
+            if (entry.match(new RegExp(dataValue, "i"))) {
+                let foundNumber = findFirstNumberInString(entry);
+                console.log("found " + dataValue, foundNumber);
+                if (foundNumber && dataLabelToHTMLIDTranslator[dataValue]) {
+                    //found a number for one of the data labels we use
+                    document.getElementById(dataLabelToHTMLIDTranslator[dataValue]).value = foundNumber;
+                    console.log("setting " + dataValue + "/" +  dataLabelToHTMLIDTranslator[dataValue] + " to " + foundNumber);
+                } else if (dataLabelToHTMLIDTranslator[dataValue]) {
+                    //couldn't find a number for a data label we use
+                    console.log("no found number for " + dataValue + "/" + dataLabelToHTMLIDTranslator[dataValue])
+                } else {
+                    //we have some data labels that our flowchart doesn't use but we still spot.
+                    console.log("does not use " + dataValue);
+                }
+            }
+        })
+    })
+
+    update();
+})
+
+//finds the first consecutive numbers/periods, returns as a float
+function findFirstNumberInString(string) {
+    let stringLength = string.length;
+    let firstNumberPos = string.search(/\d/);
+
+    //if you find a digit in the string, check each consecutive value until it isn't a digit or a dot, creating a string with the number as it goes. Also stops if it finds more than 1 dot in the consecutive number.
+    if (firstNumberPos != -1) {
+        let numberEndPos = firstNumberPos + 1;
+        let numberString = string[firstNumberPos]
+        let dotFound = false
+
+        while (numberEndPos < stringLength) {
+            if (string[numberEndPos].search(/\d/) != -1) {
+                //if the string at this pos is a digit, add to the string
+                numberString += string[numberEndPos];
+            } else if (string[numberEndPos].indexOf(".") != -1 && dotFound == false) {
+                //if the string at this pos is a dot AND you haven't added a dot yet, add to string
+                numberString += string[numberEndPos];
+                dotFound = true;
+            } else {
+                //break if not a number digit or if it is a second dot
+                break;
+            }
+            numberEndPos += 1;
+        }
+        return parseFloat(numberString);
+        //the detected number is from firstnumberpos to endnumberpos - 1
+    }
+    return null;
+}
+
+function removeArrayHoles(array) {
+    let newArray = [];
+    for (let i = 0; i < array.length; i++) {
+        //if the array slot has something, add to new array
+        if (array[i]) {
+            newArray.push(array[i]);
         }
     }
-    
-    outputElem.value = modifiedOcrStringArray.toString().replaceAll(",", "\n");
-    console.log(modifiedOcrStringArray);
-    console.log(modifiedOcrStringArray.toString().replaceAll(",", "\n"));
-})
+    return newArray;
+}
+
+/*== Scribe stuff end ==*/
 
 //read button click in module
 const buttonElement = /** @type {HTMLInputElement} */ (document.getElementById('inputButton'));;
 //console.log(buttonElement)
 buttonElement.addEventListener("click", update)
 
-/*== Scribe stuff end ==*/
-
 function update() {
-    //console.log(document.getElementById("ImageInput"));
-    //console.log(document.getElementById("ImageInput").value);
-
     let finalResult, warningResult
     const warningArray = []
 
