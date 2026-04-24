@@ -1,4 +1,4 @@
-import scribe from './node_modules/scribe.js-ocr/scribe.js';
+import scribe from './libraries/node_modules/scribe.js-ocr/scribe.js';
 
 function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI, TRVelocity, EA){
     let final = "ERROR";
@@ -91,7 +91,8 @@ const outputElem = document.getElementById("OCROutput");
 imageInputElement.addEventListener("change", async () => {
     //exit if no files uploaded
     if (!imageInputElement.files) return;
-    document.getElementById("imageSrc").src = URL.createObjectURL(imageInputElement.files[0]);;
+    document.getElementById("imageSrc").src = URL.createObjectURL(imageInputElement.files[0]);
+    console.log(URL.createObjectURL(imageInputElement.files[0]));
 
     console.log("recieved image, starting scan");
     outputElem.value = "Loading...";
