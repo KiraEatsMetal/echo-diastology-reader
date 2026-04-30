@@ -28,7 +28,6 @@
     "http-proxy": "^1.18.1",
     "http-server": "^14.1.1",
     "iconv-lite": "^0.6.3",
-    "jimp": "^1.6.1",
     "jsdom": "^29.0.2",
     "lodash": "^4.17.21",
     "mime": "^1.6.0",
@@ -54,5 +53,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "devDependencies": {}
 }
