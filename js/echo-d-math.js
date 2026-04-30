@@ -1,4 +1,5 @@
-import scribe from './node_modules/scribe.js-ocr/scribe.js';
+import scribe from './libraries/node_modules/scribe.js-ocr/scribe.js';
+//console.log(cv);
 
 function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI, TRVelocity, EA){
     let final = "ERROR";
@@ -82,28 +83,61 @@ function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI,
 
 /*== Scribe stuff ==*/
 
-//detect image upload and show it
+//prep for showing image upload and ocr results
 const imageInputElement = document.getElementById("ImageInput");
-
-//const uploadedImageElement = document.getElementById("UploadedImage");
 const outputElem = document.getElementById("OCROutput");
 
 imageInputElement.addEventListener("change", async () => {
     //exit if no files uploaded
     if (!imageInputElement.files) return;
-    document.getElementById("imageSrc").src = URL.createObjectURL(imageInputElement.files[0]);;
+    console.log(imageInputElement.files);
+    document.getElementById("imageSrc").src = URL.createObjectURL(imageInputElement.files[0]);
 
     console.log("recieved image, starting scan");
     outputElem.value = "Loading...";
 
+    //scribeFile(imageInputElement.files)
+})
+
+/*==OpenCV stuff==*/
+document.getElementById("imageSrc").onload = async () => {
+    console.log("starting opencv processing")
+    let mat = cv.imread(document.getElementById("imageSrc")); //reads image from file to cv mat
+
+    cv.GaussianBlur(mat, mat, {width: 3, height: 3}, 0, 0); //gauss blur
+    cv.cvtColor(mat, mat, cv.COLOR_RGBA2GRAY); //grayscale
+    cv.normalize(mat, mat, 0, 255, cv.NORM_MINMAX); //normalize
+    cv.threshold(mat, mat, 128, 255, cv.THRESH_BINARY); //pray
+    
+    cv.imshow('canvasOutput', mat); //draw to canvas
+
+    //creates image file from canvas output, then feeds file to scribe
+    document.getElementById("canvasOutput").toBlob(function(blob) {
+        console.log("starting blob processing", blob);
+        let file = new File([blob], 'canvasImage.png', { type: 'image/png' });
+        console.log("blob processing results:", file);
+        scribeFile([file])
+    }, "image/png")
+
+    mat.delete(); //remove from memory
+    document.getElementById("imageSrc").src = null; // remove image source since we draw it in the canvas
+    console.log("finished opencv processing")
+}
+
+/*==end of OpenCV stuff==*/
+//runs after you upload a file to the image input, specifically after that function feeds it to the image html element and it loads
+
+/*==Scribe stuff==*/
+async function scribeFile(filelist) {
     // if you want more control, "use `init`, `importFiles`, `recognize`, and `exportData` separately." scribe.js, line 85
     //start ocr engine
     const ocrParams = { anyOk: false, vanillaMode: false, langs: ['eng'] };
     scribe.init({ ocr: true, ocrParams });
     
     //import and read files
-    console.log(imageInputElement.files);
-    await scribe.importFiles(imageInputElement.files);
+    console.log("scribing files")
+    await scribe.importFiles(filelist);
+    console.log("scribed files")
 
     await scribe.recognize(ocrParams.langs);
     const ocrExport = scribe.exportData('txt');
@@ -148,6 +182,14 @@ imageInputElement.addEventListener("change", async () => {
 
     //removing holes in array
     ocrStringArray = removeArrayHoles(ocrStringArray);
+
+    //add combined string to end of array
+    let combinedString = "";
+    ocrStringArray.forEach((entry) => {
+        combinedString += entry;
+    })
+    console.log("combined string: ", combinedString);
+    ocrStringArray.push(combinedString);
     
     //display results
     outputElem.value = ocrStringArray.toString().replaceAll(",", "\n");
@@ -194,7 +236,9 @@ imageInputElement.addEventListener("change", async () => {
     })
 
     update();
-})
+}
+/*==end of Scribe stuff==*/
+
 
 //finds the first consecutive numbers/periods, returns as a float
 function findFirstNumberInString(string) {
