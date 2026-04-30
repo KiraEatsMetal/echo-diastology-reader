@@ -3,21 +3,14 @@ chart at https://www.asecho.org/wp-content/uploads/2025/07/Left-Ventricular-Dias
 
 //==//
 
-features done: flowchart solver, manual input, image uploading
-features wanted: display uploaded image, read uploaded image, scan read result for values and input them to the html
+features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html
+features wanted: 
 
 //==//
 
 need to do:
-cut the filth WIP
-recognize the data labels, then find the data they are attached to
-recognize when a label is empty somehow
 
-before cleaning:
-x\nl i LJ\n) ~ 4\n- ~-\n-\nAl\n» U\n-\n' 1 ~~n ¢\n=n '. q ’ .\nb ' MV E/E‘ Mean\nMV E’ Septal LA Vol Index”\nCl , ) ' ' ye Luh sa n ! ’ i » DEE EN .‘ : .\na. Nl ' . . . , _\na l kd J :\n.\nStra\n67 % { BP\nSp § Srrm-y\nI\nlenad\n10.15 MOQWWMO\nratte\n0.07 m/s Sa Prapeqny\n“OMQQOWV\n17.5 mI/m 2 BP mm.m¢.atm0oon paw\n1\n+\nI Ll\nv L]\nI\nI\n, -' Mve Lateral ! .\ns\n1\n1\nl\n1\nI or\n' I . ' g\nTo i [a oe ' 1 pe Pe <a — Tl pe Pe\noh I be\n1\n1 . f ! i oo Yn\nTR Velocity -\n‘ 4\nTy\nMV A Vmax\n*\nb I“I1\n.I.I. I ‘I‘:JL1 i oo I I py ol,\nq+ i\n»\n4\n*\naakarieniattendan ims stating Imentchidaion - i\n- - \\\n1\n“MOMM-\ngnu-“mn- \\\nPE. CoA - .\n- -\nMm- o 0.78 m/s\nCL om “ma\n0.06 m/s i?” 1\ni\nan amvh ~AA-..~._.L.\nI\nl\nI\nI\n!\n.~.——4——s uli~.A‘lA-A\nMV E Vmax\n2 2 bh & a= 8\nVv‘m A vv—vv– w—v ST – 1 I ]\n- . ’ l 0.85 ' ' . 2 tpommwfififlfiw\nL\nMV E/A [\nI\ntwo—Mom, & Wp I\n1\nI\n0.66 m/s ] - , 1\nI I\n{\nI\nCl Ch a As A Ra hd 2 i AR ARR Akl Lede rd ral AAunnlﬂnnnlﬂﬁmhﬂ—w
-
-after cleaning:
-bMVE/EMean,MVESeptalLAVolIndex,67%BP,10.15MOQWWMO,0.07m/sSaPrapeqny,17.5mI/m2BPmm.m.atm0oonpaw,Toiaoe1pePeaTlpePe,1.fiooYn,TRVelocity,MVAVmax,bII1,.I.I.IIJL1iooIIpyol,Mmo0.78m/s,0.06m/si?1,..4suli.AlAA,MVEVmax,22bh&a8,VvmAvvvvwvST1I,.l0.85.2tpommwfififlfiw,MVE/A,0.66m/s1,ClChaAsARahd2iARARRAklLederdralAAunnlﬂnnnlﬂﬁmhﬂw
+lol we just halved the incoming resolution and it works fine
 
 line 160 of import js
 line 471 of import js

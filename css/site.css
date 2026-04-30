@@ -35,7 +35,7 @@
     background-color: #A3C9A8;
   }
 
-  img {
+  #canvasOutput {
     width: 100%;
     height: auto;
   }

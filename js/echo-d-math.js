@@ -81,38 +81,72 @@ function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI,
     return final;
 }
 
-/*== Scribe stuff ==*/
-
 //prep for showing image upload and ocr results
 const imageInputElement = document.getElementById("ImageInput");
-const outputElem = document.getElementById("OCROutput");
+const outputTextArea = document.getElementById("OCROutput");
+const outputCanvas = document.getElementById("canvasOutput");
+const imageHolder = document.getElementById("imageSrc");
 
+//things to search for
+const dataLabels = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"]
+
+//key to match data labels to html input fields by id
+const dataLabelToHTMLIDTranslator = {        
+    MVESeptal: "epSeptal",
+    MVELateral: "epLateral",
+    MVEEMean: "averageEe",
+    LAVolIndex: "LAVI",
+    TRVelocity: "TRVelocity",
+    MVEA: "EA",   
+    MVEESeptal: "EeSeptal",
+    MVEELateral: "EeLateral",
+}
+
+/*==Image loading stuff==*/
 imageInputElement.addEventListener("change", async () => {
     //exit if no files uploaded
     if (!imageInputElement.files) return;
     console.log(imageInputElement.files);
-    document.getElementById("imageSrc").src = URL.createObjectURL(imageInputElement.files[0]);
+    imageHolder.src = URL.createObjectURL(imageInputElement.files[0]);
 
     console.log("recieved image, starting scan");
-    outputElem.value = "Loading...";
+    outputTextArea.value = "Loading...";
+
+    dataLabels.forEach((dataLabel) => {
+        if (dataLabelToHTMLIDTranslator[dataLabel]) {
+            document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = null;
+        }
+    })
 
     //scribeFile(imageInputElement.files)
 })
+/*==end of mage loading stuff==*/
 
 /*==OpenCV stuff==*/
-document.getElementById("imageSrc").onload = async () => {
-    console.log("starting opencv processing")
-    let mat = cv.imread(document.getElementById("imageSrc")); //reads image from file to cv mat
+imageHolder.onload = async () => {
+    console.log("starting opencv processing :: ", imageHolder, imageHolder.width, imageHolder.height);
+    
+    //halve image resolution for better ocr results
+    imageHolder.width = imageHolder.width / 2;
+    console.log(imageHolder, imageHolder.width, imageHolder.height);
+    
+    let mat = cv.imread(imageHolder); //reads image from file to cv mat
+    //reset image resolution, otherwise subsequent uses have their resolution exponentially halved
+    imageHolder.width = imageHolder.width * 2;
 
     cv.GaussianBlur(mat, mat, {width: 3, height: 3}, 0, 0); //gauss blur
     cv.cvtColor(mat, mat, cv.COLOR_RGBA2GRAY); //grayscale
     cv.normalize(mat, mat, 0, 255, cv.NORM_MINMAX); //normalize
-    cv.threshold(mat, mat, 128, 255, cv.THRESH_BINARY); //pray
+    cv.threshold(mat, mat, 128 + 18, 255, cv.THRESH_BINARY); //convert to black and white image, black/white cutoff is 50% (128) + testing number
+    /*
+    good test values:
+    16, 20, 18
+    */
     
     cv.imshow('canvasOutput', mat); //draw to canvas
 
     //creates image file from canvas output, then feeds file to scribe
-    document.getElementById("canvasOutput").toBlob(function(blob) {
+    outputCanvas.toBlob(function(blob) {
         console.log("starting blob processing", blob);
         let file = new File([blob], 'canvasImage.png', { type: 'image/png' });
         console.log("blob processing results:", file);
@@ -120,14 +154,14 @@ document.getElementById("imageSrc").onload = async () => {
     }, "image/png")
 
     mat.delete(); //remove from memory
-    document.getElementById("imageSrc").src = null; // remove image source since we draw it in the canvas
+    imageHolder.src = null; // remove image source since we draw it in the canvas
+    console.log("canvas: ", outputCanvas); //adjust width for viewing pleasure
     console.log("finished opencv processing")
 }
-
 /*==end of OpenCV stuff==*/
 //runs after you upload a file to the image input, specifically after that function feeds it to the image html element and it loads
 
-/*==Scribe stuff==*/
+/*==Scribe stuff and word proccessing==*/
 async function scribeFile(filelist) {
     // if you want more control, "use `init`, `importFiles`, `recognize`, and `exportData` separately." scribe.js, line 85
     //start ocr engine
@@ -137,10 +171,10 @@ async function scribeFile(filelist) {
     //import and read files
     console.log("scribing files")
     await scribe.importFiles(filelist);
-    console.log("scribed files")
 
     await scribe.recognize(ocrParams.langs);
     const ocrExport = scribe.exportData('txt');
+    console.log("scribed files")
     console.log(ocrExport);
 
     //string modification
@@ -158,16 +192,14 @@ async function scribeFile(filelist) {
     //removing holes in array
     ocrStringArray = removeArrayHoles(ocrStringArray);
 
-    //next: take the string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry
-    //things to search for
-    const dataLabels = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"]
+    //next: take the string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry    
 
     ocrStringArray.forEach((currentValue, index) => {
         let hasLabel = false;
         let hasNum = false;
         //search for labels
-        dataLabels.forEach((dataValue) => {
-            if (currentValue.match(new RegExp(dataValue, "i"))) { hasLabel = true; }
+        dataLabels.forEach((dataLabel) => {
+            if (currentValue.match(new RegExp(dataLabel, "i"))) { hasLabel = true; }
         });
 
         //search for numbers
@@ -192,44 +224,33 @@ async function scribeFile(filelist) {
     ocrStringArray.push(combinedString);
     
     //display results
-    outputElem.value = ocrStringArray.toString().replaceAll(",", "\n");
+    outputTextArea.value = ocrStringArray.toString().replaceAll(",", "\n");
     console.log(ocrStringArray);
-    console.log(outputElem.value);
+    console.log(outputTextArea.value);
 
-    //key to match data labels to html input fields by id
-    const dataLabelToHTMLIDTranslator = {        
-        MVESeptal: "epSeptal",
-        MVELateral: "epLateral",
-        MVEEMean: "averageEe",
-        LAVolIndex: "LAVI",
-        TRVelocity: "TRVelocity",
-        MVEA: "EA",   
-        MVEESeptal: "EeSeptal",
-        MVEELateral: "EeLateral",
-    }
-
-    dataLabels.forEach((entry) => {
-        if (dataLabelToHTMLIDTranslator[entry]) {
-            document.getElementById(dataLabelToHTMLIDTranslator[entry]).value = null;
+    dataLabels.forEach((dataLabel) => {
+        if (dataLabelToHTMLIDTranslator[dataLabel]) {
+            document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = null;
         }
     })
+
     //find any with both label and value, apply value to matching html input field
     //per entry, search for each data label. if found, look for a number. if found, set that number as the matching html element's value.
-    ocrStringArray.forEach((entry) => {
-        dataLabels.forEach((dataValue) => {
-            if (entry.match(new RegExp(dataValue, "i"))) {
-                //start number search after the location of the found label 
-                let foundNumber = findFirstNumberInString(entry.slice(entry.search(new RegExp(dataValue, "i"))));
-                if (foundNumber && dataLabelToHTMLIDTranslator[dataValue]) {
+    ocrStringArray.forEach((ocrEntry) => {
+        dataLabels.forEach((dataLabel) => {
+            if (ocrEntry.match(new RegExp(dataLabel, "i"))) {
+                //start number search after the location of the found label
+                let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i"))));
+                if (foundNumber && dataLabelToHTMLIDTranslator[dataLabel]) {
                     //found a number for one of the data labels we use
-                    document.getElementById(dataLabelToHTMLIDTranslator[dataValue]).value = foundNumber;
-                    console.log("setting " + dataValue + "/" +  dataLabelToHTMLIDTranslator[dataValue] + " to " + foundNumber);
-                } else if (dataLabelToHTMLIDTranslator[dataValue]) {
+                    document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
+                    console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber);
+                } else if (dataLabelToHTMLIDTranslator[dataLabel]) {
                     //couldn't find a number for a data label we use
-                    console.log("no found number for " + dataValue + "/" + dataLabelToHTMLIDTranslator[dataValue])
+                    console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel])
                 } else {
                     //we have some data labels that our flowchart doesn't use but we still spot.
-                    console.log("does not use " + dataValue);
+                    console.log("does not use " + dataLabel);
                 }
             }
         })
@@ -237,8 +258,7 @@ async function scribeFile(filelist) {
 
     update();
 }
-/*==end of Scribe stuff==*/
-
+/*==end of Scribe stuff and word proccessing==*/
 
 //finds the first consecutive numbers/periods, returns as a float
 function findFirstNumberInString(string) {
@@ -281,8 +301,6 @@ function removeArrayHoles(array) {
     }
     return newArray;
 }
-
-/*== Scribe stuff end ==*/
 
 //read button click in module
 const buttonElement = /** @type {HTMLInputElement} */ (document.getElementById('inputButton'));;
