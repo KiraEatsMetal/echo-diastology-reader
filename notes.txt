@@ -3,14 +3,15 @@ chart at https://www.asecho.org/wp-content/uploads/2025/07/Left-Ventricular-Dias
 
 //==//
 
-features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html
+features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles
 features wanted: 
 
 //==//
 
 need to do:
 
-lol we just halved the incoming resolution and it works fine
+chop image into its separate labels and read those individually
+after recieving a value from ocr, process the value because it tends to drop decimal places
 
 line 160 of import js
 line 471 of import js
