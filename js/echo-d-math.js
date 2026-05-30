@@ -142,8 +142,8 @@ imageHolder.onload = async () => {
     //good test values: 16, 20, 18
 
     //gap closing
-    cv.dilate(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3))); //thickens lines
-    cv.erode(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3))); //thins them
+    cv.dilate(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 2))); //thickens lines
+    cv.erode(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 2))); //thins them
     //doing these in that order closes gaps, reverse order removes small items. ORDER REVERSES IF IMAGE IS BW VS WB
 
     //box detection adapted from https://towardsdatascience.com/checkbox-table-cell-detection-using-opencv-python-332c57d25171/
@@ -230,7 +230,7 @@ imageHolder.onload = async () => {
                 console.log("valid rectangle :: " + i, cropRect, area)
                 
                 cv.rectangle(img_bin_final, new cv.Point(x-width,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
-                cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (9 - drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
+                cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
                 cv.rectangle(imageInput, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 0, 0), 5) //removes box (fills with black) on image read by opencv
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
 
@@ -309,7 +309,7 @@ async function scribeFile(filelist) {
     //string modification
     //get ocr export as string and remove cull characters, which are all useless
     let ocrString = (await ocrExport).valueOf();
-    const cullCharacters = [`~`,`(`,`)`,` `,`-`,`—`,`–`,`_`,"'",`=`,`+`,`,`,`{`,`}`,`“`,`”`,`»`,`¢`,`‘`,`’`,`!`,`:`,`[`,`]`,`§`,`<`,`>`,`*`,`/`,`\\`,`?`,``,``,``]
+    const cullCharacters = [`~`,`(`,`)`,` `,`-`,`—`,`–`,`_`,"'",`=`,`+`,`,`,`{`,`}`,`“`,`”`,`»`,`¢`,`‘`,`’`,`!`,`:`,`[`,`]`,`§`,`<`,`>`,`*`,`/`,`\\`,`?`,`;`,`©`,`®`]
     cullCharacters.forEach((value) => { ocrString = ocrString.replaceAll(value, ""); })
 
     //split into array by newlines
