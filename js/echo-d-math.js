@@ -103,32 +103,6 @@ const dataLabelToHTMLIDTranslator = {
     MVEELateral: "EeLateral",
 }
 
-//enter label as key, get array of fragments of that label. you want these to be the shortest fragments unique to the word
-const dataLabelFragmentArrays = {
-    //LVEF: [], DOES NOT USE
-    MVEEMean: [],
-    MVESeptal: [],
-    LAVolIndex: ["lav", "dex"], //failed: la
-    MVELateral: [],
-    TRVelocity: ["tr", "velo", "city"], //failed: vel
-    //MVAVmax: [], DOES NOT USE
-    MVEA: [],
-    //MVEVmax: [], DOES NOT USE
-    //MVEESeptal: [], not on data
-    //MVEELateral: [], not on data
-}
-
-//could also go a step further and define letter substitutions to try
-/*
-ex: trveIocity -> trveLocity, replace i's with l's and test the edited word
-define a dict of letters to try swapping (i to l, etc), then FIGURE THIS OUT BEFORE YOU EVEN TRY TO IMPLEMENT THIS, THIS WILL BE A PAIN
-*/
-const letterSubstitutions = {
-    v: ["y"],
-    l: ["i"],
-    e: ["f"]
-}
-
 /*==Image loading stuff==*/
 imageInputElement.addEventListener("change", async () => {
     if (!imageInputElement.files) return; //exit if no files uploaded
@@ -235,7 +209,10 @@ imageHolder.onload = async () => {
     let croppedMat = new cv.Mat()
     //target box is about 1/30 the area of the example images, so cut anything greater than 1/20th the image's area
     //grab the first 9 boxes that are small enough
-    let areaThreshold = 20000; //replace this with a non-hardcoded value later, get image length and width, multiply them, get a portion of that area
+    //replace these with a non-hardcoded value later, get image length and width, multiply them, get a portion of that area
+    let areaThreshold = 20000;
+    let heightThreshold = 100;
+    let widthThreshold = 400;
     let drawnBoxes = 0 //counter for boxes we draw/boxes that fit in the area threshold
 
     for (let i = 0; i < areaArray.length; i++) {
@@ -252,7 +229,7 @@ imageHolder.onload = async () => {
 
             cropRect = new cv.Rect(x-(width*85/100), y, width * 2, height) //create rectangle object of target crop
 
-            if (cropRect.x > 0 && cropRect.height < 100 && area < areaThreshold) {
+            if (cropRect.x > 0 && area < areaThreshold && cropRect.width < widthThreshold && cropRect.height < heightThreshold) {
                 console.log("valid rectangle :: " + i, cropRect, "area: " + area)
                 
                 cv.rectangle(img_bin_final, new cv.Point(x-width,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
@@ -393,6 +370,31 @@ async function scribeFile(filelist) {
     })
 
 
+    //enter label as key, get array of fragments of that label. you want these to be the shortest fragments unique to the word
+    const dataLabelFragmentArrays = {
+        //LVEF: [], DOES NOT USE
+        MVEEMean: ["veem", "ean"],
+        MVESeptal: ["sep"],
+        LAVolIndex: ["lav", "vol", "lin", "dex"], //failed: la
+        MVELateral: ["lat", "ral"],
+        TRVelocity: ["tr", "velo", "city"], //failed: vel
+        //MVAVmax: [], DOES NOT USE
+        MVEA: ["vea"],
+        //MVEVmax: [], DOES NOT USE
+        //MVEESeptal: [], not on data
+        //MVEELateral: [], not on data
+    }
+
+    //could also go a step further and define letter substitutions to try
+    //ex: trveIocity -> trveLocity, replace i's with l's and test the edited word
+    //define a dict of letters to try swapping (i to l, etc), then FIGURE THIS OUT BEFORE YOU EVEN TRY TO IMPLEMENT THIS, THIS WILL BE A PAIN
+    //enter letter, get array of misread letters
+    const letterSubstitutions = {
+        v: ["y"],
+        l: ["i"],
+        e: ["f"]
+    }
+
     //track found labels so we can log which we didn't find
     //let labelNotFound = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"] //this version has all labels
     let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this version only has labels we use
@@ -435,15 +437,15 @@ async function scribeFile(filelist) {
         })
     })
 
+    let labelsFound = [] //store labels found as fragments, we used to remove found labels from labelNotFound but that made it skip while iterating
     //after checking for full labels, check for fragments of labels not found
     labelNotFound.forEach((dataLabel) => { //for each label we haven't found
-        //console.log("searching for fragments of "+ dataLabel)
         let foundValue = false;
         ocrStringArray.forEach((ocrEntry) => { //search each entry
             dataLabelFragmentArrays[dataLabel].forEach((labelFragment) => { //per label fragment
                 if (foundValue) {return}
                 if (ocrEntry.match(new RegExp(labelFragment, "i"))) { //if we find a fragment
-                    removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
+                    labelsFound.push(dataLabel) //mark it as found
                     let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i"))));
                     if (foundNumber) {
                         foundValue = true
@@ -468,12 +470,36 @@ async function scribeFile(filelist) {
             })
         })
     })
+    //clear labels found by fragments from missing labels 
+    labelsFound.forEach((foundLabel) => {
+        removeArrayEntry(labelNotFound, foundLabel); //remove label from unfound labels array
+    })
 
     //adjust set values to account for missed decimals
     //average ee
+    let averageEeVal = document.getElementById("averageEe").value
+    while (averageEeVal > 100) {
+        averageEeVal = averageEeVal/10
+        document.getElementById("averageEe").value = Math.round(averageEeVal * 100)/100
+    }
     //e septal
+    let eSeptalVal = document.getElementById("epSeptal").value
+    while (eSeptalVal > 0.4) {
+        eSeptalVal = eSeptalVal/10
+        document.getElementById("epSeptal").value = Math.round(eSeptalVal * 100)/100
+    }
     //lavi
+    let laviVal = document.getElementById("LAVI").value
+    while (laviVal > 100) {
+        laviVal = laviVal/10
+        document.getElementById("LAVI").value = Math.round(laviVal * 100)/100
+    }
     //e lateral
+    let eLateralVal = document.getElementById("epLateral").value
+    while (eLateralVal > 0.4) {
+        eLateralVal = eLateralVal/10
+        document.getElementById("epLateral").value = Math.round(eLateralVal * 100)/100
+    }
     //tr velocity
     let trVeloVal = document.getElementById("TRVelocity").value
     while (trVeloVal > 10) {
@@ -482,7 +508,7 @@ async function scribeFile(filelist) {
     }
     //e/a
     let eaValue = document.getElementById("EA").value
-    while (eaValue > 10) {
+    while (eaValue > 5) {
         eaValue = eaValue/10
         document.getElementById("EA").value = Math.round(eaValue * 100)/100
     }
@@ -597,7 +623,7 @@ function update() {
     //console.log(variableInput["epSeptal"], variableInput["epLateral"], variableInput["EeSeptal"], variableInput["EeLateral"], variableInput["averageEe"], variableInput["LAVI"], variableInput["TRVelocity"], variableInput["EA"]);
     //console.log();
 
-    finalResult = runFlowChart(variableInput["epSeptal"], variableInput["epLateral"], variableInput["EeSeptal"], variableInput["EeLateral"], variableInput["averageEe"], variableInput["LAVI"], variableInput["TRVelocity"], variableInput["EA"]);
+    finalResult = runFlowChart(variableInput["epSeptal"]*100, variableInput["epLateral"]*100, variableInput["EeSeptal"], variableInput["EeLateral"], variableInput["averageEe"], variableInput["LAVI"], variableInput["TRVelocity"], variableInput["EA"]);
 
     //display missing variable warnings
     let warning = document.getElementById("warnings");
