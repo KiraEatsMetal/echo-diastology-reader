@@ -36,6 +36,16 @@
   }
 
   #canvasOutput {
-    width: 100%;
+    width: 49%;
+    height: auto;
+  }
+
+  #debugCanvasOutputOne {
+    width: 49%;
+    height: auto;
+  }
+
+  canvas {
+    width: 33%;
     height: auto;
   }

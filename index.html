@@ -8,7 +8,7 @@
     <script src="js/echo-d-math.js" type="module" defer></script>
 </head>
 <body>
-    <h1>Echo Diastology Flowchart Solver V1.2.1</h1>
+    <h1>Echo Diastology Flowchart Solver V1.2.3</h1>
     <h2>Enter parameters:</h2>
 
     <label for="ImageInput">OCR Image Input:</label><br>
@@ -17,11 +17,11 @@
 
     <label for="averageEe">average E/e':</label><br>
     <input type="text" id="averageEe" name="EeAverage"><br>
-    <label for="epSeptal">e' septal (cm/s):</label><br>
+    <label for="epSeptal">e' septal (m/s):</label><br>
     <input type="text" id="epSeptal" name="epSeptal"><br>
     <label for="LAVI">LA Vol Index (LAVI):</label><br>
     <input type="text" id="LAVI" name="LAVI"><br>
-    <label for="epLateral">e' lateral (cm/s):</label><br>
+    <label for="epLateral">e' lateral (m/s):</label><br>
     <input type="text" id="epLateral" name="epLateral"><br>
     <label for="TRVelocity">TR velocity (m/s):</label><br>
     <input type="text" id="TRVelocity" name="TRVelocity"><br>
@@ -38,6 +38,10 @@
     <div id="output">output</div>
     <img id="imageSrc" alt=""/>
     <canvas id="canvasOutput"></canvas>
+    <canvas id="debugCanvasOutputOne"></canvas>
+    <!---->
+    <!--<canvas id="debugCanvasOutputTwo"></canvas>-->
+    <!--<canvas id="debugCanvasOutputThree"></canvas>-->
 
 </body>
 </html>
