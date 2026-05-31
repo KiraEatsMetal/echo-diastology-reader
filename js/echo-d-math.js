@@ -130,7 +130,6 @@ imageHolder.onload = async () => {
     console.log(":: starting opencv processing :: ", imageHolder, imageHolder.width, imageHolder.height);
     
     imageHolder.width = imageHolder.width / 2; //halve image resolution for better ocr results
-    //console.log(imageHolder, imageHolder.width, imageHolder.height);
     let imageInput = cv.imread(imageHolder); //reads image from file to cv mat
     imageHolder.width = imageHolder.width * 2; //reset image resolution, otherwise subsequent uses have their resolution exponentially halved
     imageHolder.src = null; // remove image source since we draw it in the canvas
@@ -173,14 +172,12 @@ imageHolder.onload = async () => {
     //fill holes in the boxes
     cv.dilate(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(10, 5))); //thickens them
     cv.erode(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(9, 4))); //thins lines
-    //invert image
-    cv.bitwise_not(img_bin_final, img_bin_final);
+    cv.bitwise_not(img_bin_final, img_bin_final); //invert image
     
     //output variables for connectedComponentsWithStats
     let labels = new cv.Mat();
     let stats = new cv.Mat();
     let centroids = new cv.Mat();
-
     let numLabels = cv.connectedComponentsWithStats(img_bin_final, labels, stats, centroids); //detects boxes, outputs data to previous output variables
 
     //area sorting variables
@@ -195,9 +192,7 @@ imageHolder.onload = async () => {
     areaArray.sort(function(a, b){return b - a}) //sort array from largest to smallest
     
     cv.cvtColor(img_bin_final, img_bin_final, cv.COLOR_GRAY2RGB); //ungrayscale image so we can draw colour it later
-    //cv.cvtColor(imageInput, imageInput, cv.COLOR_GRAY2RGB); //ungrayscale for same reason
 
-    //LOOK AT ME: what you need to do: make 9 canvases (done), output to them (done), toBlob each of them
     //creates 9 canvases to output crops of the processed input image to
     let outputCanvasArray = []
     for (let i = 0; i < 9; i++) {
@@ -207,23 +202,17 @@ imageHolder.onload = async () => {
         if (oldCanvas) {oldCanvas.remove()}
         document.body.appendChild(outputCanvasArray[i]);
     }
-    
-    //image cropping from https://docs.opencv.org/3.4/js_basic_ops_roi.html
-    let cropRect
-    let croppedMat = new cv.Mat()
-    //target box is about 1/30 the area of the example images, so cut anything greater than 1/20th the image's area
+
     //grab the first 9 boxes that are small enough
-    //replace these with a non-hardcoded value later, get image length and width, multiply them, get a portion of that area
-    //let areaThreshold = 20000;
-    //let heightThreshold = 100;
-    //let widthThreshold = 600;
     let areaThreshold = imageInput.cols*imageInput.rows/36;
     let widthThreshold = imageInput.cols/3;
     let heightThreshold = imageInput.rows/4;
     console.log("w, h, a image values:", imageInput.cols, imageInput.rows, imageInput.cols*imageInput.rows)
     console.log("w, h, a thresholds:", widthThreshold, heightThreshold, areaThreshold)
 
-
+    //image cropping from https://docs.opencv.org/3.4/js_basic_ops_roi.html
+    let cropRect
+    let croppedMat = new cv.Mat()
     let drawnBoxes = 0 //counter for boxes we draw/boxes that fit in the area threshold
 
     for (let i = 0; i < areaArray.length; i++) {
@@ -296,7 +285,6 @@ imageHolder.onload = async () => {
     croppedMat.delete();
     imageInput.delete();
     img_bin_final.delete();
-    //console.log("canvas: ", outputCanvas); //adjust width for viewing pleasure
     console.log(":: finished opencv processing")
 }
 /*==end of OpenCV stuff==*/
@@ -330,11 +318,10 @@ async function scribeFile(filelist) {
 
     //remove entries that are too short to contain useful data
     ocrStringArray.forEach((value, index) => {if (value.length <= 2) { console.log("removing " + ocrStringArray[index]); delete ocrStringArray[index] }})
-    //removing holes in array
-    ocrStringArray = removeArrayHoles(ocrStringArray);
+    ocrStringArray = removeArrayHoles(ocrStringArray); //removing holes in array
 
-    //next: take the string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry    
-
+    //next: take the string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry
+    //consider using the fragment system here too?
     ocrStringArray.forEach((currentValue, index) => {
         let hasLabel = false;
         let hasNum = false;
@@ -349,37 +336,20 @@ async function scribeFile(filelist) {
         //delete if no number or label found
         if (!hasLabel && !hasNum) {
             console.log("no num or label, deleting " + ocrStringArray[index])
-            //we use delete to leave the index values intact and remove the holes delete leaves later
             delete ocrStringArray[index];
         }
     })
-
-    //removing holes in array
-    ocrStringArray = removeArrayHoles(ocrStringArray);
-
-    //combines array into a single string, helps find 'lost' label/data pairs that were split across array entries
-    /*
-    let combinedString = "";
-    ocrStringArray.forEach((entry) => {
-        combinedString += entry;
-    })
-    */
-    //console.log("combined string: ", combinedString);
-    //pick one of these! one adds the string to the array, one just replaces the whole array with the string
-    //ocrStringArray.push(combinedString);
-    //ocrStringArray = [combinedString]
+    ocrStringArray = removeArrayHoles(ocrStringArray); //removing holes in array
     
     //display results
     outputTextArea.value = ocrStringArray.toString().replaceAll(",", "\n");
-    //console.log(ocrStringArray);
-    //console.log(outputTextArea.value);
 
+    //clear html input zones
     dataLabels.forEach((dataLabel) => {
         if (dataLabelToHTMLIDTranslator[dataLabel]) {
             document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = null;
         }
     })
-
 
     //enter label as key, get array of fragments of that label. you want these to be the shortest fragments unique to the word
     const dataLabelFragmentArrays = {
@@ -397,69 +367,73 @@ async function scribeFile(filelist) {
     }
 
     //track found labels so we can log which we didn't find
-    //let labelNotFound = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"] //this version has all labels
-    let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this version only has labels we use
-    //find any with both label and value, apply value to matching html input field
-    //per entry, search for each data label. if found, look for a number. if found, set that number as the matching html element's value.
-    //if no number found, check next entry for a number
-    //if data label not found, check for fragments of the data label.
+    let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this only has labels we use
+    //find label, look for value, apply to input field. if label not found, search for label fragments, look for value, apply.
     dataLabels.forEach((dataLabel) => {
         let foundValue = false
+
         ocrStringArray.forEach((ocrEntry) => {
             if (foundValue) {return}
+            
             if (ocrEntry.match(new RegExp(dataLabel, "i"))) { //if data label found
                 removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
-                //start number search after the location of the found label
-                let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i"))));
+
+                let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i")))); //start number search after the location of the found label
                 if (foundNumber && dataLabelToHTMLIDTranslator[dataLabel]) {
-                    foundValue = true
-                    //found a number for one of the data labels we use
+                    foundValue = true //found a number for one of the data labels we use
                     document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                     console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber);
 
-                } else if (dataLabelToHTMLIDTranslator[dataLabel]) {
-                    //if you don't find a number, try looking in the array entry after the current ocrEntry
-                    let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1; //get next array entry index
+                } else if (dataLabelToHTMLIDTranslator[dataLabel]) { //if no number, look in the next array entry
+                    let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1;
                     if (ocrEntryIndex < ocrStringArray.length) {
-                        //if you find a number, set it and log it, otherwise say you found no number
+
                         foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
-                        if (foundNumber) {
-                            foundValue = true
+                        if (foundNumber) { //if you find a number, set it and log it, otherwise say you found no number
+                            foundValue = true //found a number for one of the data labels we use
                             document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                             console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from next array entry");
+
                         } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])}
+
                     } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
+                    
                 } else {console.log("does not use " + dataLabel);} //we have some data labels that our flowchart doesn't use but we still spot.
             }
         })
     })
 
-    let labelsFound = [] //store labels found as fragments, we used to remove found labels from labelNotFound but that made it skip while iterating
     //after checking for full labels, check for fragments of labels not found
+    let labelsFound = [] //store labels found as fragments, we used to remove found labels from labelNotFound but that made it skip while iterating
     labelNotFound.forEach((dataLabel) => { //for each label we haven't found
         let foundValue = false;
+        
         ocrStringArray.forEach((ocrEntry) => { //search each entry
+            if (foundValue) {return}
             dataLabelFragmentArrays[dataLabel].forEach((labelFragment) => { //per label fragment
                 if (foundValue) {return}
+
                 if (ocrEntry.match(new RegExp(labelFragment, "i"))) { //if we find a fragment
                     labelsFound.push(dataLabel) //mark it as found
-                    let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i"))));
+
+                    let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i")))); //start number search after the location of the fragment
                     if (foundNumber) {
-                        foundValue = true
-                        //found a number for the data label fragment
+                        foundValue = true //found a number for the data label fragment
                         document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                         console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment);
-                    } else {
-                        //if you don't find a number, try looking in the array entry after the current ocrEntry
-                        let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1; //get next array entry index
+
+                    } else { //if no number, look in the next array entry
+                        let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1;
                         if (ocrEntryIndex < ocrStringArray.length) {
-                            //look for number, if you find a number, set it and log it
+
                             foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
-                            if (foundNumber) {
-                                foundValue = true
+                            if (foundNumber) { //if you find a number, set it and log it, otherwise say you found no number
+                                foundValue = true //found a number for the data label fragment
                                 document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                                 console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment + " from next array entry");
+
                             } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
+
                         } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
                     }
                 }
