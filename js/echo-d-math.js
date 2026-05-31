@@ -103,6 +103,32 @@ const dataLabelToHTMLIDTranslator = {
     MVEELateral: "EeLateral",
 }
 
+//enter label as key, get array of fragments of that label. you want these to be the shortest fragments unique to the word
+const dataLabelFragmentArrays = {
+    //LVEF: [], DOES NOT USE
+    MVEEMean: [],
+    MVESeptal: [],
+    LAVolIndex: ["lav", "dex"], //failed: la
+    MVELateral: [],
+    TRVelocity: ["tr", "velo", "city"], //failed: vel
+    //MVAVmax: [], DOES NOT USE
+    MVEA: [],
+    //MVEVmax: [], DOES NOT USE
+    //MVEESeptal: [], not on data
+    //MVEELateral: [], not on data
+}
+
+//could also go a step further and define letter substitutions to try
+/*
+ex: trveIocity -> trveLocity, replace i's with l's and test the edited word
+define a dict of letters to try swapping (i to l, etc), then FIGURE THIS OUT BEFORE YOU EVEN TRY TO IMPLEMENT THIS, THIS WILL BE A PAIN
+*/
+const letterSubstitutions = {
+    v: ["y"],
+    l: ["i"],
+    e: ["f"]
+}
+
 /*==Image loading stuff==*/
 imageInputElement.addEventListener("change", async () => {
     if (!imageInputElement.files) return; //exit if no files uploaded
@@ -224,10 +250,10 @@ imageHolder.onload = async () => {
             const height = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_HEIGHT);
             //xy is top right corner, so to get the label plus data box, use a rect from x-width, y to x+width, y+height
 
-            cropRect = new cv.Rect(x-width, y, width * 2, height) //create rectangle object of target crop
+            cropRect = new cv.Rect(x-(width*85/100), y, width * 2, height) //create rectangle object of target crop
 
             if (cropRect.x > 0 && cropRect.height < 100 && area < areaThreshold) {
-                console.log("valid rectangle :: " + i, cropRect, area)
+                console.log("valid rectangle :: " + i, cropRect, "area: " + area)
                 
                 cv.rectangle(img_bin_final, new cv.Point(x-width,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
@@ -238,7 +264,7 @@ imageHolder.onload = async () => {
                 cv.imshow("box"+drawnBoxes, croppedMat); //draw crop to target canvas
                 drawnBoxes += 1
             } else {
-                console.log("invalid rectangle, skipping :: " + i, cropRect, area)
+                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area)
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 0, 0), 2) //draws red box showing detected box
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
             }
@@ -251,16 +277,18 @@ imageHolder.onload = async () => {
 
     let fileArray = []
     
-    //creates image file from canvas output, then feeds file to scribe
+    //creates image file from main canvas output, then feeds file to scribe
+    /*
     outputCanvas.toBlob(function(blob) {
         console.log()
         console.log(":: starting blob processing main", blob);
         let file = new File([blob], 'canvasImage.png', { type: 'image/png' });
         console.log(":: blob processing results:", file);
-        //fileArray.push(file)
-        //scribeFile([file])
+        scribeFile([file])
     }, "image/png")
+    */
 
+    //creates image files from cropped canvas outputs, then feeds array of files to scribe
     for (let i = 0; i < 9; i++) {
         outputCanvasArray[i].toBlob(function(blob) {
             console.log()
@@ -283,7 +311,7 @@ imageHolder.onload = async () => {
     img_bin_final.delete();
 
     imageHolder.src = null; // remove image source since we draw it in the canvas
-    console.log("canvas: ", outputCanvas); //adjust width for viewing pleasure
+    //console.log("canvas: ", outputCanvas); //adjust width for viewing pleasure
     console.log(":: finished opencv processing")
 }
 /*==end of OpenCV stuff==*/
@@ -303,13 +331,12 @@ async function scribeFile(filelist) {
 
     await scribe.recognize(ocrParams.langs);
     const ocrExport = scribe.exportData('txt');
-    console.log(":: scribed files, processing text")
-    //console.log(ocrExport);
+    console.log(":: scribed files, processing text:", ocrExport);
 
     //string modification
     //get ocr export as string and remove cull characters, which are all useless
     let ocrString = (await ocrExport).valueOf();
-    const cullCharacters = [`~`,`(`,`)`,` `,`-`,`—`,`–`,`_`,"'",`=`,`+`,`,`,`{`,`}`,`“`,`”`,`»`,`¢`,`‘`,`’`,`!`,`:`,`[`,`]`,`§`,`<`,`>`,`*`,`/`,`\\`,`?`,`;`,`©`,`®`]
+    const cullCharacters = [`~`,`(`,`)`,` `,`-`,`—`,`–`,`_`,"'",`=`,`+`,`,`,`{`,`}`,`“`,`”`,`»`,`¢`,`‘`,`’`,`!`,`:`,`[`,`]`,`§`,`<`,`>`,`*`,`/`,`\\`,`?`,`;`,`©`,`®`,`«`]
     cullCharacters.forEach((value) => { ocrString = ocrString.replaceAll(value, ""); })
 
     //split into array by newlines
@@ -365,20 +392,41 @@ async function scribeFile(filelist) {
         }
     })
 
+
+    //track found labels so we can log which we didn't find
+    //let labelNotFound = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"] //this version has all labels
+    let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this version only has labels we use
     //find any with both label and value, apply value to matching html input field
     //per entry, search for each data label. if found, look for a number. if found, set that number as the matching html element's value.
-    ocrStringArray.forEach((ocrEntry) => {
-        dataLabels.forEach((dataLabel) => {
-            if (ocrEntry.match(new RegExp(dataLabel, "i"))) {
+    //if no number found, check next entry for a number
+    //if data label not found, check for fragments of the data label.
+    dataLabels.forEach((dataLabel) => {
+        let foundValue = false
+        ocrStringArray.forEach((ocrEntry) => {
+            if (foundValue) {return}
+            if (ocrEntry.match(new RegExp(dataLabel, "i"))) { //if data label found
+                removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
                 //start number search after the location of the found label
                 let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i"))));
                 if (foundNumber && dataLabelToHTMLIDTranslator[dataLabel]) {
+                    foundValue = true
                     //found a number for one of the data labels we use
                     document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                     console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber);
+
                 } else if (dataLabelToHTMLIDTranslator[dataLabel]) {
-                    //couldn't find a number for a data label we use
-                    console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel])
+                    //if you don't find a number, try looking in the array entry after the current ocrEntry
+                    let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1; //get next array entry index
+                    if (ocrEntryIndex < ocrStringArray.length) {
+                        foundValue = true
+                        //if you find a number, set it and log it, otherwise say you found no number
+                        foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
+                        if (foundNumber) {
+                            document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
+                            console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from next array entry");
+                        } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])}
+
+                    } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
                 } else {
                     //we have some data labels that our flowchart doesn't use but we still spot.
                     console.log("does not use " + dataLabel);
@@ -387,9 +435,62 @@ async function scribeFile(filelist) {
         })
     })
 
-    console.log(":: text processed")
+    //after checking for full labels, check for fragments of labels not found
+    labelNotFound.forEach((dataLabel) => { //for each label we haven't found
+        //console.log("searching for fragments of "+ dataLabel)
+        let foundValue = false;
+        ocrStringArray.forEach((ocrEntry) => { //search each entry
+            dataLabelFragmentArrays[dataLabel].forEach((labelFragment) => { //per label fragment
+                if (foundValue) {return}
+                if (ocrEntry.match(new RegExp(labelFragment, "i"))) { //if we find a fragment
+                    removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
+                    let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i"))));
+                    if (foundNumber) {
+                        foundValue = true
+                        //found a number for the data label fragment
+                        document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
+                        console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment);
+                    } else {
+                        //if you don't find a number, try looking in the array entry after the current ocrEntry
+                        let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1; //get next array entry index
+                        if (ocrEntryIndex < ocrStringArray.length) {
+                            //look for number, if you find a number, set it and log it
+                            foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
+                            if (foundNumber) {
+                                foundValue = true
+                                document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
+                                console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment + " from next array entry");
+                            } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
+                        } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
 
-    update();
+                    }
+                }
+            })
+        })
+    })
+
+    //adjust set values to account for missed decimals
+    //average ee
+    //e septal
+    //lavi
+    //e lateral
+    //tr velocity
+    let trVeloVal = document.getElementById("TRVelocity").value
+    while (trVeloVal > 10) {
+        trVeloVal = trVeloVal/10
+        document.getElementById("TRVelocity").value = Math.round(trVeloVal * 100)/100
+    }
+    //e/a
+    let eaValue = document.getElementById("EA").value
+    while (eaValue > 10) {
+        eaValue = eaValue/10
+        document.getElementById("EA").value = Math.round(eaValue * 100)/100
+    }
+
+
+    labelNotFound.forEach((missingLabel) => {console.error("could not find " + missingLabel)}) //log all labels you couldn't find
+    console.log(":: text processed")
+    update(); //run flowchart
 }
 /*==end of Scribe stuff and word proccessing==*/
 
@@ -424,6 +525,7 @@ function findFirstNumberInString(string) {
     return null;
 }
 
+//takes an array and returns a copy without holes
 function removeArrayHoles(array) {
     let newArray = [];
     for (let i = 0; i < array.length; i++) {
@@ -433,6 +535,12 @@ function removeArrayHoles(array) {
         }
     }
     return newArray;
+}
+
+//takes an array and value, removes value from array. not tested with multiple of the same value.
+function removeArrayEntry(array, entry) {
+    let index = array.indexOf(entry, array);
+    if (index > -1) {array.splice(index, 1)}
 }
 
 //read button click in module
@@ -494,10 +602,11 @@ function update() {
     //display missing variable warnings
     let warning = document.getElementById("warnings");
     if (warningArray.length > 0) {
-        warningResult = "Warning, missing: |";
+        warningResult = "Warning, missing: ";
         warningArray.forEach(element => {
-            warningResult += warningTranslation[element] + "|";
+            warningResult += warningTranslation[element] + ", ";
         });
+        warningResult = warningResult.slice(0, warningResult.length - 2)
         warning.innerHTML = warningResult;
     }
 

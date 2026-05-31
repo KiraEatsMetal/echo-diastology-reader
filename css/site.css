@@ -35,7 +35,17 @@
     background-color: #A3C9A8;
   }
 
+  #canvasOutput {
+    width: 49%;
+    height: auto;
+  }
+
+  #debugCanvasOutputOne {
+    width: 49%;
+    height: auto;
+  }
+
   canvas {
-    width: 100%;
+    width: 33%;
     height: auto;
   }
