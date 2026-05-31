@@ -133,12 +133,14 @@ imageHolder.onload = async () => {
     //console.log(imageHolder, imageHolder.width, imageHolder.height);
     let imageInput = cv.imread(imageHolder); //reads image from file to cv mat
     imageHolder.width = imageHolder.width * 2; //reset image resolution, otherwise subsequent uses have their resolution exponentially halved
+    imageHolder.src = null; // remove image source since we draw it in the canvas
 
     //adjusting image for better ocr results
     cv.GaussianBlur(imageInput, imageInput, {width: 3, height: 3}, 0, 0); //gauss blur
     cv.cvtColor(imageInput, imageInput, cv.COLOR_RGBA2GRAY); //grayscale
+    cv.imshow('canvasOutput', imageInput); //draw to canvas
     cv.normalize(imageInput, imageInput, 0, 255, cv.NORM_MINMAX); //normalize
-    cv.threshold(imageInput, imageInput, 128 + 18, 255, cv.THRESH_BINARY_INV); //convert to black and white image, black/white cutoff is 50% (128) + testing number
+    cv.threshold(imageInput, imageInput, 128 + 16, 255, cv.THRESH_BINARY_INV); //convert to black and white image, black/white cutoff is 50% (128) + testing number
     //good test values: 16, 20, 18
 
     //gap closing
@@ -147,11 +149,13 @@ imageHolder.onload = async () => {
     //doing these in that order closes gaps, reverse order removes small items. ORDER REVERSES IF IMAGE IS BW VS WB
 
     //box detection adapted from https://towardsdatascience.com/checkbox-table-cell-detection-using-opencv-python-332c57d25171/
-    let line_min_width = 15
+    let line_min_width_h = imageInput.rows/82
+    let line_min_width_v = imageInput.rows/27
+    console.log(imageInput.cols, imageInput.rows, line_min_width_h, line_min_width_v)
     //object that defines a horizontal line
-    let kernal_h = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(line_min_width, 1)); //[[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+    let kernal_h = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(line_min_width_h, 1)); //[[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
     //object that defines a vertical line
-    let kernal_v = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, line_min_width)); //[[1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1]]
+    let kernal_v = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, line_min_width_v)); //[[1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1], [1]]
 
     //creates two bw images, one with detected vertical lines and one with detected horizontal lines
     let img_bin_h = new cv.Mat();
@@ -166,11 +170,11 @@ imageHolder.onload = async () => {
     img_bin_h.delete(); //remove from memory
     img_bin_v.delete(); //remove from memory
 
+    //fill holes in the boxes
+    cv.dilate(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(10, 5))); //thickens them
+    cv.erode(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(9, 4))); //thins lines
     //invert image
     cv.bitwise_not(img_bin_final, img_bin_final);
-    //fill holes in the boxes
-    cv.erode(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5))); //thickens lines
-    cv.dilate(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5))); //thins them
     
     //output variables for connectedComponentsWithStats
     let labels = new cv.Mat();
@@ -191,7 +195,7 @@ imageHolder.onload = async () => {
     areaArray.sort(function(a, b){return b - a}) //sort array from largest to smallest
     
     cv.cvtColor(img_bin_final, img_bin_final, cv.COLOR_GRAY2RGB); //ungrayscale image so we can draw colour it later
-    cv.cvtColor(imageInput, imageInput, cv.COLOR_GRAY2RGB); //ungrayscale for same reason
+    //cv.cvtColor(imageInput, imageInput, cv.COLOR_GRAY2RGB); //ungrayscale for same reason
 
     //LOOK AT ME: what you need to do: make 9 canvases (done), output to them (done), toBlob each of them
     //creates 9 canvases to output crops of the processed input image to
@@ -210,15 +214,21 @@ imageHolder.onload = async () => {
     //target box is about 1/30 the area of the example images, so cut anything greater than 1/20th the image's area
     //grab the first 9 boxes that are small enough
     //replace these with a non-hardcoded value later, get image length and width, multiply them, get a portion of that area
-    let areaThreshold = 20000;
-    let heightThreshold = 100;
-    let widthThreshold = 400;
+    //let areaThreshold = 20000;
+    //let heightThreshold = 100;
+    //let widthThreshold = 600;
+    let areaThreshold = imageInput.cols*imageInput.rows/36;
+    let widthThreshold = imageInput.cols/3;
+    let heightThreshold = imageInput.rows/4;
+    console.log("w, h, a image values:", imageInput.cols, imageInput.rows, imageInput.cols*imageInput.rows)
+    console.log("w, h, a thresholds:", widthThreshold, heightThreshold, areaThreshold)
+
+
     let drawnBoxes = 0 //counter for boxes we draw/boxes that fit in the area threshold
 
     for (let i = 0; i < areaArray.length; i++) {
         if (drawnBoxes > 8) {console.log("drawn 9 target boxes"); break} //stop drawing boxes after you draw the 9 largest that fit in the threshold
         const area = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_AREA);
-        //console.log(area, area < areaThreshold);
         if (true) {
             //get values of the box
             const x      = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_LEFT);
@@ -227,21 +237,21 @@ imageHolder.onload = async () => {
             const height = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_HEIGHT);
             //xy is top right corner, so to get the label plus data box, use a rect from x-width, y to x+width, y+height
 
-            cropRect = new cv.Rect(x-(width*85/100), y, width * 2, height) //create rectangle object of target crop
-
+            cropRect = new cv.Rect(x-(width*85/100), y, width*185/100, height) //create rectangle object of target crop
             if (cropRect.x > 0 && area < areaThreshold && cropRect.width < widthThreshold && cropRect.height < heightThreshold) {
                 console.log("valid rectangle :: " + i, cropRect, "area: " + area)
                 
-                cv.rectangle(img_bin_final, new cv.Point(x-width,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
+                cv.rectangle(img_bin_final, new cv.Point(cropRect.x,cropRect.y), new cv.Point(cropRect.x+cropRect.width,cropRect.y+cropRect.height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
                 cv.rectangle(imageInput, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 0, 0), 5) //removes box (fills with black) on image read by opencv
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
+                cv.imshow('canvasOutput', imageInput); //draw to canvas
 
                 croppedMat = imageInput.roi(cropRect); //output crop of processed image
                 cv.imshow("box"+drawnBoxes, croppedMat); //draw crop to target canvas
                 drawnBoxes += 1
             } else {
-                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area)
+                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, cropRect.x > 0, area < areaThreshold, cropRect.width < widthThreshold, cropRect.height < heightThreshold)
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 0, 0), 2) //draws red box showing detected box
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
             }
@@ -286,8 +296,6 @@ imageHolder.onload = async () => {
     croppedMat.delete();
     imageInput.delete();
     img_bin_final.delete();
-
-    imageHolder.src = null; // remove image source since we draw it in the canvas
     //console.log("canvas: ", outputCanvas); //adjust width for viewing pleasure
     console.log(":: finished opencv processing")
 }
@@ -321,7 +329,7 @@ async function scribeFile(filelist) {
     console.log(ocrStringArray);
 
     //remove entries that are too short to contain useful data
-    ocrStringArray.forEach((value, index) => {if (value.length <= 2) { delete ocrStringArray[index] }})
+    ocrStringArray.forEach((value, index) => {if (value.length <= 2) { console.log("removing " + ocrStringArray[index]); delete ocrStringArray[index] }})
     //removing holes in array
     ocrStringArray = removeArrayHoles(ocrStringArray);
 
@@ -340,6 +348,7 @@ async function scribeFile(filelist) {
 
         //delete if no number or label found
         if (!hasLabel && !hasNum) {
+            console.log("no num or label, deleting " + ocrStringArray[index])
             //we use delete to leave the index values intact and remove the holes delete leaves later
             delete ocrStringArray[index];
         }
@@ -349,10 +358,12 @@ async function scribeFile(filelist) {
     ocrStringArray = removeArrayHoles(ocrStringArray);
 
     //combines array into a single string, helps find 'lost' label/data pairs that were split across array entries
+    /*
     let combinedString = "";
     ocrStringArray.forEach((entry) => {
         combinedString += entry;
     })
+    */
     //console.log("combined string: ", combinedString);
     //pick one of these! one adds the string to the array, one just replaces the whole array with the string
     //ocrStringArray.push(combinedString);
@@ -385,16 +396,6 @@ async function scribeFile(filelist) {
         //MVEELateral: [], not on data
     }
 
-    //could also go a step further and define letter substitutions to try
-    //ex: trveIocity -> trveLocity, replace i's with l's and test the edited word
-    //define a dict of letters to try swapping (i to l, etc), then FIGURE THIS OUT BEFORE YOU EVEN TRY TO IMPLEMENT THIS, THIS WILL BE A PAIN
-    //enter letter, get array of misread letters
-    const letterSubstitutions = {
-        v: ["y"],
-        l: ["i"],
-        e: ["f"]
-    }
-
     //track found labels so we can log which we didn't find
     //let labelNotFound = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"] //this version has all labels
     let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this version only has labels we use
@@ -420,19 +421,15 @@ async function scribeFile(filelist) {
                     //if you don't find a number, try looking in the array entry after the current ocrEntry
                     let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1; //get next array entry index
                     if (ocrEntryIndex < ocrStringArray.length) {
-                        foundValue = true
                         //if you find a number, set it and log it, otherwise say you found no number
                         foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
                         if (foundNumber) {
+                            foundValue = true
                             document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                             console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from next array entry");
                         } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])}
-
                     } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
-                } else {
-                    //we have some data labels that our flowchart doesn't use but we still spot.
-                    console.log("does not use " + dataLabel);
-                }
+                } else {console.log("does not use " + dataLabel);} //we have some data labels that our flowchart doesn't use but we still spot.
             }
         })
     })
@@ -464,7 +461,6 @@ async function scribeFile(filelist) {
                                 console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment + " from next array entry");
                             } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
                         } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
-
                     }
                 }
             })
@@ -474,6 +470,7 @@ async function scribeFile(filelist) {
     labelsFound.forEach((foundLabel) => {
         removeArrayEntry(labelNotFound, foundLabel); //remove label from unfound labels array
     })
+    labelNotFound.forEach((missingLabel) => {console.error("could not find " + missingLabel)}) //log all labels you couldn't find
 
     //adjust set values to account for missed decimals
     //average ee
@@ -513,8 +510,6 @@ async function scribeFile(filelist) {
         document.getElementById("EA").value = Math.round(eaValue * 100)/100
     }
 
-
-    labelNotFound.forEach((missingLabel) => {console.error("could not find " + missingLabel)}) //log all labels you couldn't find
     console.log(":: text processed")
     update(); //run flowchart
 }
