@@ -391,8 +391,8 @@ async function scribeFile(filelist) {
         if (currentValue.match(/\d/)) { hasNum = true } //search for numbers
 
         if (!hasLabel && !hasNum) { //delete if no number or label found
-            console.log("no num or label, deleting " + ocrStringArray[index])
-            delete ocrStringArray[index];
+            console.log("no num or label found in " + ocrStringArray[index])
+            //delete ocrStringArray[index];
         }
     })
     ocrStringArray = removeArrayHoles(ocrStringArray); //removing holes in array
@@ -415,12 +415,14 @@ async function scribeFile(filelist) {
     let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this only has labels we use
     //find label, look for value, apply to input field. if label not found, search for label fragments, look for value, apply.
     dataLabels.forEach((dataLabel) => {
+        //console.log("---\nlooking for", dataLabel)
         let foundValue = false
 
         ocrStringArray.forEach((ocrEntry) => {
             if (foundValue) {return}
             
             if (ocrEntry.match(new RegExp(dataLabel, "i"))) { //if data label found
+                //console.log("found", dataLabel, "in", ocrEntry)
                 removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
 
                 let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i")))); //start number search after the location of the found label
@@ -450,60 +452,99 @@ async function scribeFile(filelist) {
 
                     } else {console.error("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
                     
-                } else {console.log("does not use " + dataLabel);} //we have some data labels that our flowchart doesn't use but we still spot.
+                } else {console.log("does not use " + dataLabel); foundValue = true;} //we have some data labels that our flowchart doesn't use but we still spot.
+            
+            } else if (dataLabelFragmentArrays[dataLabel]) { //if you don't find the label and it has fragments...
+                dataLabelFragmentArrays[dataLabel].forEach((labelFragment) => { //per label fragment
+                    if (foundValue) {return}
+
+                    if (ocrEntry.match(new RegExp(labelFragment, "i"))) { //if we find a fragment
+                        //console.log("found", dataLabel, "from fragment", labelFragment, "in", ocrEntry)
+                        removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
+
+                        let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i")))); //start number search after the location of the fragment
+                        if (foundNumber) {
+                            
+                            foundValue = true //found a number for the data label fragment
+                            usedStringTracker[ocrStringArray.indexOf(ocrEntry)] = true
+
+                            document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
+                            console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment);
+
+                        } else { //if no number, look in the next array entry
+                            let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1;
+                            if (ocrEntryIndex < ocrStringArray.length) {
+
+                                foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
+                                if (foundNumber) { //if you find a number, set it and log it, otherwise say you found no number
+                                    
+                                    foundValue = true //found a number for the data label fragment
+                                    usedStringTracker[ocrEntryIndex - 1] = true
+                                    usedStringTracker[ocrEntryIndex] = true
+
+                                    document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
+                                    console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment + " from next array entry");
+
+                                } else {console.error("no number found for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + " in own or next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
+
+                            } else {console.error("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
+                        }
+                    }
+                })
             }
         })
-    })
 
-    //after checking for full labels, check for fragments of labels not found
-    let labelsFound = [] //store labels found as fragments, we used to remove found labels from labelNotFound but that made it skip while iterating
-    labelNotFound.forEach((dataLabel) => { //for each label we haven't found
-        let foundValue = false;
-        
-        ocrStringArray.forEach((ocrEntry) => { //search each entry
-            if (foundValue) {return}
-            dataLabelFragmentArrays[dataLabel].forEach((labelFragment) => { //per label fragment
-                if (foundValue) {return}
+        //if we didn't find it yet, per entry do a levenshtein value search
+        if (foundValue == false && dataLabelFragmentArrays[dataLabel]) {
+            //console.log("search failed, trying levenshtein value search")
 
-                if (ocrEntry.match(new RegExp(labelFragment, "i"))) { //if we find a fragment
-                    labelsFound.push(dataLabel) //mark it as found
+            ocrStringArray.forEach((ocrEntry) => {
+                //console.log("couldn't find label or fragment of", dataLabel, "in", ocrEntry, "trying levenshtein distance method")
+                let labelSlice = ocrEntry
+                if (ocrEntry.search(/\d/) > -1) { //if you find a number,
+                    labelSlice = ocrEntry.slice(0, ocrEntry.search(/\d/)) //cut entry at number's index to get only the label
+                }
 
-                    let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i")))); //start number search after the location of the fragment
-                    if (foundNumber) {
+                //console.log("lev distance of", dataLabel, "and", labelSlice, "is", levenshteinDistance(dataLabel, labelSlice))
+                if (levenshteinDistance(dataLabel, labelSlice) < 2) {
+                    //console.log("lev distance of", dataLabel, "and", labelSlice, "is", levenshteinDistance(dataLabel, labelSlice))
+                    removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
+                    
+                    let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i")))); //start number search after the location of the found label
+                    if (foundNumber && dataLabelToHTMLIDTranslator[dataLabel]) {
                         
-                        foundValue = true //found a number for the data label fragment
+                        foundValue = true //found a number for one of the data labels we use
                         usedStringTracker[ocrStringArray.indexOf(ocrEntry)] = true
 
                         document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
-                        console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment);
+                        console.log("levenshtein match found, setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber);
 
-                    } else { //if no number, look in the next array entry
+                    } else if (dataLabelToHTMLIDTranslator[dataLabel]) { //if no number, look in the next array entry
                         let ocrEntryIndex = ocrStringArray.indexOf(ocrEntry) + 1;
                         if (ocrEntryIndex < ocrStringArray.length) {
 
                             foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
                             if (foundNumber) { //if you find a number, set it and log it, otherwise say you found no number
-                                
-                                foundValue = true //found a number for the data label fragment
+
+                                foundValue = true //found a number for one of the data labels we use
                                 usedStringTracker[ocrEntryIndex - 1] = true
                                 usedStringTracker[ocrEntryIndex] = true
-
+                                
                                 document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
-                                console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment + " from next array entry");
+                                console.log("levenshtein match found, setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from next array entry");
 
-                            } else {console.error("no number found for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + " in own or next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
+                            } else {console.error("no number found for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + " in own or next array entry: " + ocrStringArray[ocrEntryIndex])}
 
-                        } else {console.error("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
-                    }
+                        } else {console.error("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array, no levenshtein match")}
+                        
+                    } else {console.log("does not use " + dataLabel); foundValue = true;} //we have some data labels that our flowchart doesn't use but we still spot.
                 }
             })
-        })
+        }
+        
+        //console.log(dataLabel, "search end\n---")
     })
 
-    //clear labels found by fragments from missing labels
-    labelsFound.forEach((foundLabel) => {
-        removeArrayEntry(labelNotFound, foundLabel); //remove label from unfound labels array
-    })
     labelNotFound.forEach((missingLabel) => {console.error("could not find " + missingLabel)}) //log all labels you couldn't find
     //log strings we couldn't get data from
     let unusedStrings = []
