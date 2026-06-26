@@ -1,8 +1,7 @@
 import scribe from './libraries/node_modules/scribe.js-ocr/scribe.js';
-//console.log(cv);
 
 function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI, TRVelocity, EA){
-    console.log("RUNNING FLOWCHART")
+    //console.log("RUNNING FLOWCHART")
     let final = "ERROR";
 
     let stageOneMarkerCount = 0;
@@ -18,31 +17,31 @@ function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI,
     if (epSeptal <= 6 || epLateral <= 7 || (epSeptal + epLateral) <= 13) {
         stageOneMarkerCount += 1;
         reducedEp = true
-        console.log("Reduced e' velocity");
+        console.log("Reduced e' velocity (septal <= 6, lateral <= 7, or combined <= 13)");
     }
     if (averageEe > 14) {
         stageOneMarkerCount += 1;
         EeHigh = true
-        console.log("High average E/e'");
+        console.log("High average E/e' (>14)");
     }
     if (LAVI > 34) {
         stageOneMarkerCount += 1;
-        console.log("High LAVI");
+        console.log("High LAVI (>34)");
     }
     if (EA <= 0.8) {
         stageOneMarkerCount += 1;
         isEALow = true;
-        console.log("E/A low");
+        console.log("E/A low (<=0.8)");
 
     } else if (EA >= 2) {
         stageOneMarkerCount += 1;
         isEAHigh = true
-        console.log("E/A high");
+        console.log("E/A high (>=2)");
     }
     
     //stage 1 marker count
     if (stageOneMarkerCount >= 2) {
-        console.log("dysfunction present", stageOneMarkerCount);
+        console.log("dysfunction present,", stageOneMarkerCount, "markers found");
         //found dysfunction, start checking graphic 2
         
         //graphic 2 marker 2 and 3 checking
@@ -74,7 +73,7 @@ function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI,
             final = "normal";
         }
     } else {
-        console.log("dysfunction NOT present", stageOneMarkerCount);
+        console.log("dysfunction NOT present,", stageOneMarkerCount, "marker found");
         final = "normal";
     }
 
@@ -98,7 +97,7 @@ const dataLabelToHTMLIDTranslator = {
     MVEEMean: "averageEe",
     LAVolIndex: "LAVI",
     TRVelocity: "TRVelocity",
-    MVEA: "EA",   
+    MVEA: "EA",
     MVEESeptal: "EeSeptal",
     MVEELateral: "EeLateral",
 }
@@ -125,32 +124,70 @@ imageInputElement.addEventListener("change", async () => {
 /*==end of image loading stuff==*/
 
 /*==OpenCV stuff==*/
+//runs after you upload a file to the image input, specifically after that function feeds it to the image html element and it loads
 imageHolder.onload = async () => {
     console.log()
     console.log(":: starting opencv processing :: ", imageHolder, imageHolder.width, imageHolder.height);
     
-    imageHolder.width = imageHolder.width / 2; //halve image resolution for better ocr results
+    //imageHolder.width = imageHolder.width / 1; //halve image resolution for better ocr results
     let imageInput = cv.imread(imageHolder); //reads image from file to cv mat
-    imageHolder.width = imageHolder.width * 2; //reset image resolution, otherwise subsequent uses have their resolution exponentially halved
+    //imageHolder.width = imageHolder.width * 1; //reset image resolution, otherwise subsequent uses have their resolution exponentially halved
     imageHolder.src = null; // remove image source since we draw it in the canvas
+    
+    //image adjustement parameters
+    let scaleSize = 0.5 //base val 0.5
+    let blurSize = Math.round(scaleSize * 6) % 2 == 0 ? Math.round(scaleSize * 6) + 1 : Math.round(scaleSize * 6) //must be a positive odd int, base val 3. round up is safer.
+    let gapSizeX = Math.ceil(scaleSize * 6) //6
+    let gapSizeY = Math.ceil(scaleSize * 4) //4
+    console.log("blur size:" , blurSize, "gap size x and y:", gapSizeX, gapSizeY)
+    //var c = ((a < b) ? 'minor' : 'major');
 
     //adjusting image for better ocr results
-    cv.GaussianBlur(imageInput, imageInput, {width: 3, height: 3}, 0, 0); //gauss blur
+    cv.resize(imageInput, imageInput, new cv.Size(), scaleSize, scaleSize, cv.INTER_LINEAR)
+    cv.GaussianBlur(imageInput, imageInput, {width: blurSize, height: blurSize}, 0, 0); //gauss blur
     cv.cvtColor(imageInput, imageInput, cv.COLOR_RGBA2GRAY); //grayscale
     cv.imshow('canvasOutput', imageInput); //draw to canvas
     cv.normalize(imageInput, imageInput, 0, 255, cv.NORM_MINMAX); //normalize
-    cv.threshold(imageInput, imageInput, 128 + 16, 255, cv.THRESH_BINARY_INV); //convert to black and white image, black/white cutoff is 50% (128) + testing number
-    //good test values: 16, 20, 18
+    
+    cv.imshow('canvasOutput', imageInput); //draw to canvas
+    //return
+
+    //auto thresholding
+    let thresholdImage = new cv.Mat();
+    let thresholdRange = 255 //cannot be greater than 255, can be smaller though
+    let maxSteps = 0 //steps to take
+    //sets max steps to the power of two required to include the entire threshold range
+    let rangefinder = 1; while (rangefinder < thresholdRange) { maxSteps += 1; rangefinder = rangefinder * 2 }
+
+    let stepCount = 0 //steps taken
+    let stepSize = 0 //amount to adjust input
+    let binarySearchResult = thresholdRange //input threshold value
+
+    let measuredWhitePercent = 0 //white pixel percent in the adjusted bw image
+    let targetWhitePercent = 7 //compared to measured white percent
+
+    while (stepCount < maxSteps) {
+        cv.threshold(imageInput, thresholdImage, binarySearchResult, 255, cv.THRESH_BINARY_INV); //create black and white image from threshold
+        measuredWhitePercent = cv.countNonZero(thresholdImage) / (thresholdImage.cols*thresholdImage.rows) * 100 //get white pixel percent
+        stepSize = Math.max(1, Math.ceil(thresholdRange / Math.pow(2, stepCount + 1))) //sets step size to an integer >= 1, rounds up
+        if (measuredWhitePercent > targetWhitePercent) { binarySearchResult -= stepSize } //too much white
+        else if (measuredWhitePercent < targetWhitePercent) { binarySearchResult += stepSize } //not enough white
+        stepCount += 1
+    }
+
+    console.log("white pixel count: ", cv.countNonZero(thresholdImage), "image area: ", thresholdImage.cols*thresholdImage.rows, "\npercentage: ", Math.round(cv.countNonZero(thresholdImage) / (thresholdImage.cols*thresholdImage.rows) * 10000)/100 + "%", "threshold value:", binarySearchResult); //gets percentage of white in the image
+    imageInput = thresholdImage
 
     //gap closing
-    cv.dilate(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 2))); //thickens lines
-    cv.erode(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 2))); //thins them
+    let gapSize = new cv.Size(gapSizeX, gapSizeY)
+    cv.dilate(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, gapSize)); //thickens lines, base val 3, 2. must be ints.
+    cv.erode(imageInput, imageInput, cv.getStructuringElement(cv.MORPH_RECT, gapSize)); //thins them, base val 3, 2. must be ints.
     //doing these in that order closes gaps, reverse order removes small items. ORDER REVERSES IF IMAGE IS BW VS WB
 
     //box detection adapted from https://towardsdatascience.com/checkbox-table-cell-detection-using-opencv-python-332c57d25171/
     let line_min_width_h = imageInput.rows/82
-    let line_min_width_v = imageInput.rows/27
-    console.log(imageInput.cols, imageInput.rows, line_min_width_h, line_min_width_v)
+    let line_min_width_v = imageInput.rows/35 //27
+    console.log("image width:", imageInput.cols, "image height:", imageInput.rows, "\nmin line width/height:", line_min_width_h, line_min_width_v)
     //object that defines a horizontal line
     let kernal_h = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(line_min_width_h, 1)); //[[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
     //object that defines a vertical line
@@ -173,6 +210,8 @@ imageHolder.onload = async () => {
     cv.dilate(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(10, 5))); //thickens them
     cv.erode(img_bin_final, img_bin_final, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(9, 4))); //thins lines
     cv.bitwise_not(img_bin_final, img_bin_final); //invert image
+    
+    cv.imshow('canvasOutput', imageInput); //draw to canvas
     
     //output variables for connectedComponentsWithStats
     let labels = new cv.Mat();
@@ -207,8 +246,7 @@ imageHolder.onload = async () => {
     let areaThreshold = imageInput.cols*imageInput.rows/36;
     let widthThreshold = imageInput.cols/3;
     let heightThreshold = imageInput.rows/4;
-    console.log("w, h, a image values:", imageInput.cols, imageInput.rows, imageInput.cols*imageInput.rows)
-    console.log("w, h, a thresholds:", widthThreshold, heightThreshold, areaThreshold)
+    console.log("width, height, area image values:", imageInput.cols, imageInput.rows, imageInput.cols*imageInput.rows, "\nwidth, height, area thresholds:", widthThreshold, heightThreshold, areaThreshold)
 
     //image cropping from https://docs.opencv.org/3.4/js_basic_ops_roi.html
     let cropRect
@@ -234,13 +272,13 @@ imageHolder.onload = async () => {
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
                 cv.rectangle(imageInput, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 0, 0), 5) //removes box (fills with black) on image read by opencv
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
-                cv.imshow('canvasOutput', imageInput); //draw to canvas
+                //cv.imshow('canvasOutput', imageInput); //draw to canvas
 
                 croppedMat = imageInput.roi(cropRect); //output crop of processed image
                 cv.imshow("box"+drawnBoxes, croppedMat); //draw crop to target canvas
                 drawnBoxes += 1
             } else {
-                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, cropRect.x > 0, area < areaThreshold, cropRect.width < widthThreshold, cropRect.height < heightThreshold)
+                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, "\nrectangle left/start over zero:", cropRect.x > 0, "area below threshold:", area < areaThreshold, "width below threshold:", cropRect.width < widthThreshold, "height below threshold:", cropRect.height < heightThreshold)
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 0, 0), 2) //draws red box showing detected box
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
             }
@@ -248,7 +286,7 @@ imageHolder.onload = async () => {
     }
 
     //draw to various canvases
-    cv.imshow('canvasOutput', imageInput); //draw to canvas
+    //cv.imshow('canvasOutput', imageInput); //draw to canvas
     cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
 
     let fileArray = []
@@ -288,7 +326,6 @@ imageHolder.onload = async () => {
     console.log(":: finished opencv processing")
 }
 /*==end of OpenCV stuff==*/
-//runs after you upload a file to the image input, specifically after that function feeds it to the image html element and it loads
 
 /*==Scribe stuff and word proccessing==*/
 async function scribeFile(filelist) {
@@ -320,6 +357,21 @@ async function scribeFile(filelist) {
     ocrStringArray.forEach((value, index) => {if (value.length <= 2) { console.log("removing " + ocrStringArray[index]); delete ocrStringArray[index] }})
     ocrStringArray = removeArrayHoles(ocrStringArray); //removing holes in array
 
+    //enter label as key, get array of fragments of that label. you want these to be the shortest fragments unique to the word
+    const dataLabelFragmentArrays = {
+        //LVEF: [], DOES NOT USE
+        MVEEMean: ["veem", "ean"],
+        MVESeptal: ["sep"],
+        LAVolIndex: ["lav", "vol", "lin", "dex"], //failed: la
+        MVELateral: ["lat", "ral"],
+        TRVelocity: ["tr", "velo", "city"], //failed: vel
+        //MVAVmax: [], DOES NOT USE
+        MVEA: ["vea"],
+        //MVEVmax: [], DOES NOT USE
+        //MVEESeptal: [], not on data
+        //MVEELateral: [], not on data
+    }
+
     //next: take the string array, cut the fluff! if you can't find a data label (ex: mveseptal) in it or any number, remove the entry
     //consider using the fragment system here too?
     ocrStringArray.forEach((currentValue, index) => {
@@ -327,14 +379,18 @@ async function scribeFile(filelist) {
         let hasNum = false;
         //search for labels
         dataLabels.forEach((dataLabel) => {
-            if (currentValue.match(new RegExp(dataLabel, "i"))) { hasLabel = true; }
+            if (currentValue.match(new RegExp(dataLabel, "i"))) { hasLabel = true; } //found label
+            else if (dataLabelFragmentArrays[dataLabel]) {
+                dataLabelFragmentArrays[dataLabel].forEach((labelFragment) => {
+                    if (currentValue.match(new RegExp(labelFragment, "i"))) { hasLabel = true; } //found label from fragment
+                })
+            }
+            //else check for fragments
         });
+        
+        if (currentValue.match(/\d/)) { hasNum = true } //search for numbers
 
-        //search for numbers
-        if (currentValue.match(/\d/)) { hasNum = true }
-
-        //delete if no number or label found
-        if (!hasLabel && !hasNum) {
+        if (!hasLabel && !hasNum) { //delete if no number or label found
             console.log("no num or label, deleting " + ocrStringArray[index])
             delete ocrStringArray[index];
         }
@@ -351,20 +407,9 @@ async function scribeFile(filelist) {
         }
     })
 
-    //enter label as key, get array of fragments of that label. you want these to be the shortest fragments unique to the word
-    const dataLabelFragmentArrays = {
-        //LVEF: [], DOES NOT USE
-        MVEEMean: ["veem", "ean"],
-        MVESeptal: ["sep"],
-        LAVolIndex: ["lav", "vol", "lin", "dex"], //failed: la
-        MVELateral: ["lat", "ral"],
-        TRVelocity: ["tr", "velo", "city"], //failed: vel
-        //MVAVmax: [], DOES NOT USE
-        MVEA: ["vea"],
-        //MVEVmax: [], DOES NOT USE
-        //MVEESeptal: [], not on data
-        //MVEELateral: [], not on data
-    }
+    //create array to track which strings were used or not
+    let usedStringTracker = []
+    ocrStringArray.forEach((ocrEntry) => { usedStringTracker.push(false); })
 
     //track found labels so we can log which we didn't find
     let labelNotFound = ["MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVEA"] //this only has labels we use
@@ -380,7 +425,10 @@ async function scribeFile(filelist) {
 
                 let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i")))); //start number search after the location of the found label
                 if (foundNumber && dataLabelToHTMLIDTranslator[dataLabel]) {
+                    
                     foundValue = true //found a number for one of the data labels we use
+                    usedStringTracker[ocrStringArray.indexOf(ocrEntry)] = true
+
                     document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                     console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber);
 
@@ -390,13 +438,17 @@ async function scribeFile(filelist) {
 
                         foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
                         if (foundNumber) { //if you find a number, set it and log it, otherwise say you found no number
+
                             foundValue = true //found a number for one of the data labels we use
+                            usedStringTracker[ocrEntryIndex - 1] = true
+                            usedStringTracker[ocrEntryIndex] = true
+                            
                             document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                             console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from next array entry");
 
-                        } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])}
+                        } else {console.error("no number found for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + " in own or next array entry: " + ocrStringArray[ocrEntryIndex])}
 
-                    } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
+                    } else {console.error("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
                     
                 } else {console.log("does not use " + dataLabel);} //we have some data labels that our flowchart doesn't use but we still spot.
             }
@@ -418,7 +470,10 @@ async function scribeFile(filelist) {
 
                     let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i")))); //start number search after the location of the fragment
                     if (foundNumber) {
+                        
                         foundValue = true //found a number for the data label fragment
+                        usedStringTracker[ocrStringArray.indexOf(ocrEntry)] = true
+
                         document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                         console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment);
 
@@ -428,28 +483,39 @@ async function scribeFile(filelist) {
 
                             foundNumber = findFirstNumberInString(ocrStringArray[ocrEntryIndex]);
                             if (foundNumber) { //if you find a number, set it and log it, otherwise say you found no number
+                                
                                 foundValue = true //found a number for the data label fragment
+                                usedStringTracker[ocrEntryIndex - 1] = true
+                                usedStringTracker[ocrEntryIndex] = true
+
                                 document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = foundNumber;
                                 console.log("setting " + dataLabel + "/" +  dataLabelToHTMLIDTranslator[dataLabel] + " to " + foundNumber + " from " + labelFragment + " from next array entry");
 
-                            } else {console.log("no number found in next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
+                            } else {console.error("no number found for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + " in own or next array entry: " + ocrStringArray[ocrEntryIndex])} //otherwise say you found no number
 
-                        } else {console.log("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
+                        } else {console.error("no found number for " + dataLabel + "/" + dataLabelToHTMLIDTranslator[dataLabel] + ", no next array")}
                     }
                 }
             })
         })
     })
-    //clear labels found by fragments from missing labels 
+
+    //clear labels found by fragments from missing labels
     labelsFound.forEach((foundLabel) => {
         removeArrayEntry(labelNotFound, foundLabel); //remove label from unfound labels array
     })
     labelNotFound.forEach((missingLabel) => {console.error("could not find " + missingLabel)}) //log all labels you couldn't find
+    //log strings we couldn't get data from
+    let unusedStrings = []
+    for (let i = 0; i < ocrStringArray.length; i++) {
+        if (!usedStringTracker[i]) { unusedStrings.push(ocrStringArray[i]) }
+    }
+    if (unusedStrings.length > 0) { console.error("did not extract data from:", unusedStrings) }
 
     //adjust set values to account for missed decimals
     //average ee
     let averageEeVal = document.getElementById("averageEe").value
-    while (averageEeVal > 100) {
+    while (averageEeVal > 50) {
         averageEeVal = averageEeVal/10
         document.getElementById("averageEe").value = Math.round(averageEeVal * 100)/100
     }
@@ -488,6 +554,28 @@ async function scribeFile(filelist) {
     update(); //run flowchart
 }
 /*==end of Scribe stuff and word proccessing==*/
+
+
+//from: https://www.30secondsofcode.org/js/s/levenshtein-distance/
+const levenshteinDistance = (s, t) => {
+  if (!s.length) return t.length;
+  if (!t.length) return s.length;
+  const arr = [];
+  for (let i = 0; i <= t.length; i++) {
+    arr[i] = [i];
+    for (let j = 1; j <= s.length; j++) {
+      arr[i][j] =
+        i === 0
+          ? j
+          : Math.min(
+              arr[i - 1][j] + 1,
+              arr[i][j - 1] + 1,
+              arr[i - 1][j - 1] + (s[j - 1] === t[i - 1] ? 0 : 1)
+            );
+    }
+  }
+  return arr[t.length][s.length];
+};
 
 //finds the first consecutive numbers/periods, returns as a float
 function findFirstNumberInString(string) {
@@ -579,7 +667,7 @@ function update() {
 
         //console.log(value, value == "", Number(value), Number.isNaN(Number(value)))
         if (value == "" || Number.isNaN(Number(value))) {
-            console.log(variableInput[key] + " undefined")
+            console.error(variableInput[key] + " undefined")
             //if the value isn't a valid number, ex: empty or is words instead, add warning
             warningArray.push(variableInput[key]);
             variableInput[key] = 0;
