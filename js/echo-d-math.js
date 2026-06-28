@@ -155,23 +155,26 @@ imageHolder.onload = async () => {
     //auto thresholding
     let thresholdImage = new cv.Mat();
     let thresholdRange = 255 //cannot be greater than 255, can be smaller though
-    let maxSteps = 0 //steps to take
+    let maxSteps = 2 //steps to take
     //sets max steps to the power of two required to include the entire threshold range
     let rangefinder = 1; while (rangefinder < thresholdRange) { maxSteps += 1; rangefinder = rangefinder * 2 }
 
     let stepCount = 0 //steps taken
     let stepSize = 0 //amount to adjust input
-    let binarySearchResult = thresholdRange //input threshold value
+    let binarySearchResult = Math.round(thresholdRange/2) //input threshold value
 
     let measuredWhitePercent = 0 //white pixel percent in the adjusted bw image
-    let targetWhitePercent = 7 //compared to measured white percent
+    let targetWhitePercent = 8 //compared to measured white percent, tried values: 7
 
     while (stepCount < maxSteps) {
-        cv.threshold(imageInput, thresholdImage, binarySearchResult, 255, cv.THRESH_BINARY_INV); //create black and white image from threshold
+        cv.threshold(imageInput, thresholdImage, Math.round(binarySearchResult), 255, cv.THRESH_BINARY_INV); //create black and white image from threshold
         measuredWhitePercent = cv.countNonZero(thresholdImage) / (thresholdImage.cols*thresholdImage.rows) * 100 //get white pixel percent
+
         stepSize = Math.max(1, Math.ceil(thresholdRange / Math.pow(2, stepCount + 1))) //sets step size to an integer >= 1, rounds up
         if (measuredWhitePercent > targetWhitePercent) { binarySearchResult -= stepSize } //too much white
         else if (measuredWhitePercent < targetWhitePercent) { binarySearchResult += stepSize } //not enough white
+
+        //console.log(binarySearchResult, stepSize)
         stepCount += 1
     }
 
@@ -185,8 +188,8 @@ imageHolder.onload = async () => {
     //doing these in that order closes gaps, reverse order removes small items. ORDER REVERSES IF IMAGE IS BW VS WB
 
     //box detection adapted from https://towardsdatascience.com/checkbox-table-cell-detection-using-opencv-python-332c57d25171/
-    let line_min_width_h = imageInput.rows/82
-    let line_min_width_v = imageInput.rows/35 //27
+    let line_min_width_h = imageInput.rows/144 //82
+    let line_min_width_v = imageInput.rows/75 //27, 35, 65
     console.log("image width:", imageInput.cols, "image height:", imageInput.rows, "\nmin line width/height:", line_min_width_h, line_min_width_v)
     //object that defines a horizontal line
     let kernal_h = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(line_min_width_h, 1)); //[[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
@@ -235,18 +238,21 @@ imageHolder.onload = async () => {
     //creates 9 canvases to output crops of the processed input image to
     let outputCanvasArray = []
     for (let i = 0; i < 9; i++) {
-        outputCanvasArray[i] = document.createElement("canvas")
-        outputCanvasArray[i].id = "box" + i
         let oldCanvas = document.getElementById("box" + i)
         if (oldCanvas) {oldCanvas.remove()}
+        outputCanvasArray[i] = document.createElement("canvas")
+        outputCanvasArray[i].id = "box" + i
+        outputCanvasArray[i].width = 15
+        outputCanvasArray[i].height = 1
         document.body.appendChild(outputCanvasArray[i]);
     }
 
     //grab the first 9 boxes that are small enough
-    let areaThreshold = imageInput.cols*imageInput.rows/36;
+    let areaUpperBound = imageInput.cols*imageInput.rows/36;
+    let areaLowerBound = imageInput.cols*imageInput.rows/94;
     let widthThreshold = imageInput.cols/3;
     let heightThreshold = imageInput.rows/4;
-    console.log("width, height, area image values:", imageInput.cols, imageInput.rows, imageInput.cols*imageInput.rows, "\nwidth, height, area thresholds:", widthThreshold, heightThreshold, areaThreshold)
+    console.log("width, height, area image values:", imageInput.cols, imageInput.rows, imageInput.cols*imageInput.rows, "\nwidth, height, area thresholds:", widthThreshold, heightThreshold, areaUpperBound)
 
     //image cropping from https://docs.opencv.org/3.4/js_basic_ops_roi.html
     let cropRect
@@ -265,9 +271,8 @@ imageHolder.onload = async () => {
             //xy is top right corner, so to get the label plus data box, use a rect from x-width, y to x+width, y+height
 
             cropRect = new cv.Rect(x-(width*85/100), y, width*185/100, height) //create rectangle object of target crop
-            if (cropRect.x > 0 && area < areaThreshold && cropRect.width < widthThreshold && cropRect.height < heightThreshold) {
+            if (cropRect.x > 0 && area < areaUpperBound && area > areaLowerBound && cropRect.width < widthThreshold && cropRect.height < heightThreshold) {
                 console.log("valid rectangle :: " + i, cropRect, "area: " + area)
-                
                 cv.rectangle(img_bin_final, new cv.Point(cropRect.x,cropRect.y), new cv.Point(cropRect.x+cropRect.width,cropRect.y+cropRect.height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
                 cv.rectangle(imageInput, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 0, 0), 5) //removes box (fills with black) on image read by opencv
@@ -278,9 +283,10 @@ imageHolder.onload = async () => {
                 cv.imshow("box"+drawnBoxes, croppedMat); //draw crop to target canvas
                 drawnBoxes += 1
             } else {
-                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, "\nrectangle left/start over zero:", cropRect.x > 0, "area below threshold:", area < areaThreshold, "width below threshold:", cropRect.width < widthThreshold, "height below threshold:", cropRect.height < heightThreshold)
+                console.error("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, "\nrectangle left/start over zero:", cropRect.x > 0, "area too large:", area > areaUpperBound, "area too small:", area < areaLowerBound, "width below threshold:", cropRect.width < widthThreshold, "height below threshold:", cropRect.height < heightThreshold)
                 cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 0, 0), 2) //draws red box showing detected box
                 cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
+                if (area < areaLowerBound) {console.error("below area lower bound"); break}
             }
         }
     }
@@ -303,14 +309,14 @@ imageHolder.onload = async () => {
     */
 
     //creates image files from cropped canvas outputs, then feeds array of files to scribe
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < drawnBoxes; i++) {
         outputCanvasArray[i].toBlob(function(blob) {
             console.log()
             console.log(":: starting blob processing " + i, blob);
             let file = new File([blob], 'canvasImage' + i + '.png', { type: 'image/png' });
             console.log(":: blob processing results:", file);
             fileArray.push(file)
-            if (i == 8) {scribeFile(fileArray)}
+            if (i == drawnBoxes - 1) {scribeFile(fileArray)} //else {console.log(i, drawnBoxes)}
         }, "image/png")
     }
 
@@ -598,24 +604,25 @@ async function scribeFile(filelist) {
 
 
 //from: https://www.30secondsofcode.org/js/s/levenshtein-distance/
-const levenshteinDistance = (s, t) => {
-  if (!s.length) return t.length;
-  if (!t.length) return s.length;
-  const arr = [];
-  for (let i = 0; i <= t.length; i++) {
-    arr[i] = [i];
-    for (let j = 1; j <= s.length; j++) {
-      arr[i][j] =
+const levenshteinDistance = (stringOne, stringtwo) => {
+  if (!stringOne.length) return stringtwo.length;
+  if (!stringtwo.length) return stringOne.length;
+  const array = [];
+  for (let i = 0; i <= stringtwo.length; i++) {
+    array[i] = [i];
+    for (let j = 1; j <= stringOne.length; j++) {
+      array[i][j] =
         i === 0
           ? j
           : Math.min(
-              arr[i - 1][j] + 1,
-              arr[i][j - 1] + 1,
-              arr[i - 1][j - 1] + (s[j - 1] === t[i - 1] ? 0 : 1)
+              array[i - 1][j] + 1,
+              array[i][j - 1] + 1,
+              array[i - 1][j - 1] + (stringOne[j - 1] === stringtwo[i - 1] ? 0 : 1)
             );
     }
   }
-  return arr[t.length][s.length];
+  //console.table(array)
+  return array[stringtwo.length][stringOne.length];
 };
 
 //finds the first consecutive numbers/periods, returns as a float
