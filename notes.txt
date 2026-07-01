@@ -2,9 +2,9 @@ input: an image with a ton of numbers
 chart at https://www.asecho.org/wp-content/uploads/2025/07/Left-Ventricular-Diastolic-Function.pdf
 //==//
 
-features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles, chop image into separate labels and read those individually, spots data in the next string if label's string has no numbers, after recieving a value from ocr, process the value because it tends to drop decimal places, auto binary thresholding, levenshtein distance backup search, stops when boxes are too small
+features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles, chop image into separate labels and read those individually, spots data in the next string if label's string has no numbers, after recieving a value from ocr, process the value because it tends to drop decimal places, auto binary thresholding, levenshtein distance backup search, stops when boxes are too small, auto threshold selection
 
-features wanted: letter substitution
+features wanted: display data from first image next to the matching labels
 
 letters used in labels:
 acdefilmnoprstvxy
