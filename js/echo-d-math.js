@@ -156,9 +156,11 @@ imageHolder.onload = async () => {
     cv.imshow('canvasOutput', imageInput); //draw to canvas
     //return
 
+    //auto threshold adjuster
     let foundNineBoxes = false
     let thresholdCycleCounter = 0
     let targetWhitePercent = 6 //compared to measured white percent, tried values: 7
+
     while (!foundNineBoxes && thresholdCycleCounter < 50) {
         thresholdCycleCounter += 1
         console.log("starting threshold and box detection cycle at", targetWhitePercent, "target white percent, cycle count:", thresholdCycleCounter)
@@ -228,7 +230,7 @@ imageHolder.onload = async () => {
         
         //output variables for connectedComponentsWithStats
         let labels = new cv.Mat();
-        let stats = new cv.Mat();
+        var stats = new cv.Mat();
         let centroids = new cv.Mat();
         let numLabels = cv.connectedComponentsWithStats(img_bin_final, labels, stats, centroids); //detects boxes, outputs data to previous output variables
         //delete unused variables, if you don't have these for outputting (ex: replacing with null) it explodes.
@@ -237,13 +239,13 @@ imageHolder.onload = async () => {
         
 
         //area sorting variables
-        let areaDict = {}
-        let areaArray = []
+        var areaDict = {}
+        var areaArray = []
         //adapted from https://github.com/TechStark/opencv-js/pull/119
         for (let i = 1; i < numLabels; i++) {
             const area   = stats.intAt(i, cv.CC_STAT_AREA);
             areaArray.push(area) //add every area to an array
-            areaDict[area] = i //and add each area and its index to a dict, so you can get the index from the area later
+            areaDict[area] = i //and add each area and the box's index to a dict, so you can get the index from the area later
         }
         areaArray.sort(function(a, b){return b - a}) //sort array from largest to smallest
         
@@ -272,36 +274,36 @@ imageHolder.onload = async () => {
         let cropRect
         let croppedMat = new cv.Mat()
         var drawnBoxes = 0 //counter for boxes we draw/boxes that fit in the area threshold
+        var drawnBoxesArray = [] //keep the crop rect of all the boxes we draw
 
         for (let i = 0; i < areaArray.length; i++) {
-            if (drawnBoxes > 8) {console.log("drawn 9 target boxes"); foundNineBoxes = true; break} //stop drawing boxes after you draw the 9 largest that fit in the threshold
-            const area = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_AREA);
-            if (true) {
-                //get values of the box
-                const x      = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_LEFT);
-                const y      = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_TOP);
-                const width  = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_WIDTH);
-                const height = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_HEIGHT);
-                //xy is top right corner, so to get the label plus data box, use a rect from x-width, y to x+width, y+height
+            if (drawnBoxes > 8) {console.log("drawn 9 target boxes"); foundNineBoxes = true; var lastBoxFoundIndex = i - 1; break} //stop drawing boxes after you draw the 9 largest that fit in the threshold
+            //get values of the box
+            const area   = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_AREA);
+            const x      = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_LEFT);
+            const y      = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_TOP);
+            const width  = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_WIDTH);
+            const height = stats.intAt(areaDict[areaArray[i]], cv.CC_STAT_HEIGHT);
+            //xy is top right corner, so to get the label plus data box, use a rect from x-width, y to x+width, y+height
 
-                cropRect = new cv.Rect(x-(width*85/100), y, width*185/100, height) //create rectangle object of target crop
-                if (cropRect.x > 0 && area < areaUpperBound && area > areaLowerBound && cropRect.width < widthThreshold && cropRect.height < heightThreshold) {
-                    console.log("valid rectangle :: " + i, cropRect, "area: " + area)
-                    cv.rectangle(img_bin_final, new cv.Point(cropRect.x,cropRect.y), new cv.Point(cropRect.x+cropRect.width,cropRect.y+cropRect.height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
-                    cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
-                    cv.rectangle(thresholdImage, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 0, 0), blackoutSize) //removes box (fills with black) on image read by opencv
-                    cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
-                    //cv.imshow('canvasOutput', thresholdImage); //draw to canvas
+            cropRect = new cv.Rect(x-(width*85/100), y, width*185/100, height) //create rectangle object of target crop
+            if (cropRect.x > 0 && area < areaUpperBound && area > areaLowerBound && cropRect.width < widthThreshold && cropRect.height < heightThreshold) {
+                drawnBoxesArray.push(cropRect)
+                console.log("valid rectangle :: " + i, cropRect, "area: " + area, "index key: " + areaDict[areaArray[i]])
+                cv.rectangle(img_bin_final, new cv.Point(cropRect.x,cropRect.y), new cv.Point(cropRect.x+cropRect.width,cropRect.y+cropRect.height), new cv.Scalar(125, 125, 0), 2) //draws red box showing crop
+                cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 255, (1 + drawnBoxes) * (255 / 9)), 2) //draws green box showing detected box
+                cv.rectangle(thresholdImage, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(0, 0, 0), blackoutSize) //removes box (fills with black) on image read by opencv
+                cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
+                //cv.imshow('canvasOutput', thresholdImage); //draw to canvas
 
-                    croppedMat = thresholdImage.roi(cropRect); //output crop of processed image
-                    cv.imshow("box"+drawnBoxes, croppedMat); //draw crop to target canvas
-                    drawnBoxes += 1
-                } else {
-                    console.warn("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, "\nrectangle left/start over zero:", cropRect.x > 0, "area too large:", area > areaUpperBound, "area too small:", area < areaLowerBound, "width below threshold:", cropRect.width < widthThreshold, "height below threshold:", cropRect.height < heightThreshold)
-                    cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 0, 0), 2) //draws red box showing detected box
-                    cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
-                    if (area < areaLowerBound) {console.warn("below area lower bound"); break}
-                }
+                croppedMat = thresholdImage.roi(cropRect); //output crop of processed image
+                cv.imshow("box"+drawnBoxes, croppedMat); //draw crop to target canvas
+                drawnBoxes += 1
+            } else {
+                console.warn("invalid rectangle, skipping :: " + i, cropRect, "area: " + area, "\nrectangle left/start over zero:", cropRect.x > 0, "area too large:", area > areaUpperBound, "area too small:", area < areaLowerBound, "width below threshold:", cropRect.width < widthThreshold, "height below threshold:", cropRect.height < heightThreshold)
+                cv.rectangle(img_bin_final, new cv.Point(x,y), new cv.Point(x+width,y+height), new cv.Scalar(125, 0, 0), 2) //draws red box showing detected box
+                cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
+                if (area < areaLowerBound) {console.warn("below area lower bound"); break}
             }
         }
         targetWhitePercent += 0.25
@@ -310,13 +312,60 @@ imageHolder.onload = async () => {
         //cv.imshow('canvasOutput', thresholdImage); //draw to canvas
         cv.imshow('debugCanvasOutputOne', img_bin_final); //draw to canvas
 
-        //remove connectedComponentsWithStats output variables
-        stats.delete();
-
         //remove shown image mats
         croppedMat.delete();
         img_bin_final.delete();
     }
+    
+    //drawing data next to manual data inputs
+    //x pos sorting variables
+    let xDict = {}
+    let yDict = {}
+    let xArray = []
+
+    for (let i = 0; i < drawnBoxesArray.length; i++) {
+        const x = drawnBoxesArray[i].x
+        const y = drawnBoxesArray[i].y
+        xArray.push(x) //add x position to array
+        xDict[x] = i //and add each x and its box's index to a dict, so you can get the index from the x pos later
+        yDict[y] = i //also add each y and its box's index to a dict, so you can get the index from the y pos later
+    }
+    xArray.sort(function(a, b){return a - b}) //sort array of x positions from small to large
+
+    //create sub arrays for sorting
+    let fourClusterArray = []
+    let threeClusterArray = []
+    let twoClusterArray = []
+
+    //populate them
+    for (let i = 0; i < 4; i++) {fourClusterArray.push(drawnBoxesArray[xDict[xArray[i]]].y)}
+    for (let i = 4; i < 7; i++) {threeClusterArray.push(drawnBoxesArray[xDict[xArray[i]]].y)}
+    for (let i = 7; i < 9; i++) {twoClusterArray.push(drawnBoxesArray[xDict[xArray[i]]].y)}
+
+    //sort them all from small to large
+    fourClusterArray.sort(function(a, b){return a - b})
+    threeClusterArray.sort(function(a, b){return a - b})
+    twoClusterArray.sort(function(a, b){return a - b})
+
+    let combinedClusterArray = fourClusterArray.concat(threeClusterArray, twoClusterArray) //combined array of y values
+
+    for (let i = 0; i < combinedClusterArray.length; i++) {
+        combinedClusterArray[i] = drawnBoxesArray[yDict[combinedClusterArray[i]]] //replace every y pos value with its matching box, producing an array of organized boxes
+    }
+    //console.log(combinedClusterArray)
+
+    //boxes we want: 2, 3, 4, 5, 6, 8
+    let dataDisplayBoxArray = combinedClusterArray.slice(1, 6)
+    dataDisplayBoxArray.push(combinedClusterArray[7])
+    //console.log(dataDisplayBoxArray)
+
+    let dataDisplayer = new cv.Mat()
+    for (let i = 0; i < 6; i++) { //draw all 6 selected crops next to their data
+        dataDisplayer = thresholdImage.roi(dataDisplayBoxArray[i])
+        //console.log("dataDisplay" + (i + 1), dataDisplayer, dataDisplayer)
+        cv.imshow("dataDisplay" + (i + 1), dataDisplayer); //draw to canvas
+    }
+
 
     let fileArray = []
     
@@ -346,6 +395,9 @@ imageHolder.onload = async () => {
         }, "image/png")
     }
 
+
+    //remove connectedComponentsWithStats output variables
+    stats.delete();
     //remove shown image mats
     thresholdImage.delete();
     imageInput.delete();
