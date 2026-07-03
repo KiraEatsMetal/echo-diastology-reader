@@ -318,29 +318,33 @@ imageHolder.onload = async () => {
     }
     
     //drawing data next to manual data inputs
-    //x pos sorting variables
-    let xDict = {}
-    let yDict = {}
-    let xArray = []
-
-    for (let i = 0; i < drawnBoxesArray.length; i++) {
-        const x = drawnBoxesArray[i].x
-        const y = drawnBoxesArray[i].y
-        xArray.push(x) //add x position to array
-        xDict[x] = i //and add each x and its box's index to a dict, so you can get the index from the x pos later
-        yDict[y] = i //also add each y and its box's index to a dict, so you can get the index from the y pos later
-    }
-    xArray.sort(function(a, b){return a - b}) //sort array of x positions from small to large
-
-    //create sub arrays for sorting
+    let xArray = [] //array of x values to sort
+    //sub arrays for sorting
     let fourClusterArray = []
     let threeClusterArray = []
     let twoClusterArray = []
 
-    //populate them
-    for (let i = 0; i < 4; i++) {fourClusterArray.push(drawnBoxesArray[xDict[xArray[i]]].y)}
-    for (let i = 4; i < 7; i++) {threeClusterArray.push(drawnBoxesArray[xDict[xArray[i]]].y)}
-    for (let i = 7; i < 9; i++) {twoClusterArray.push(drawnBoxesArray[xDict[xArray[i]]].y)}
+    //arrays for getting a box index from an x or y value, can't use dicts due to potential duplicate values
+    let xKeys = [] //single use key index storage, make a copy if you need to use it multiple times
+    let yKeys = [] //single use key index storage, make a copy if you need to use it multiple times
+
+    for (let i = 0; i < drawnBoxesArray.length; i++) {
+        console.log(drawnBoxesArray[i])
+        const x = drawnBoxesArray[i].x
+        const y = drawnBoxesArray[i].y
+        xArray.push(x) //add x position to array
+
+        //can't use a dict for x due to occasional duplicate values
+        xKeys.push(x) //add x pos as key, its index as the value
+        yKeys.push(y) //add x pos as key, its index as the value
+    }
+    xArray.sort(function(a, b){return a - b}) //sort array of x positions from small to large
+    //console.log(xKeys)
+
+    //populate sub arrays with y values
+    for (let i = 0; i < 4; i++) {let key = xKeys.indexOf(xArray[i]); fourClusterArray.push(drawnBoxesArray[key].y); xKeys[key] = null}
+    for (let i = 4; i < 7; i++) {let key = xKeys.indexOf(xArray[i]); threeClusterArray.push(drawnBoxesArray[key].y); xKeys[key] = null}
+    for (let i = 7; i < 9; i++) {let key = xKeys.indexOf(xArray[i]); twoClusterArray.push(drawnBoxesArray[key].y); xKeys[key] = null}
 
     //sort them all from small to large
     fourClusterArray.sort(function(a, b){return a - b})
@@ -350,14 +354,14 @@ imageHolder.onload = async () => {
     let combinedClusterArray = fourClusterArray.concat(threeClusterArray, twoClusterArray) //combined array of y values
 
     for (let i = 0; i < combinedClusterArray.length; i++) {
-        combinedClusterArray[i] = drawnBoxesArray[yDict[combinedClusterArray[i]]] //replace every y pos value with its matching box, producing an array of organized boxes
+        let key = yKeys.indexOf(combinedClusterArray[i]);
+        combinedClusterArray[i] = drawnBoxesArray[key] //replace every y pos value with its matching box, producing an array of organized boxes
+        yKeys[key] = null
     }
-    //console.log(combinedClusterArray)
 
     //boxes we want: 2, 3, 4, 5, 6, 8
     let dataDisplayBoxArray = combinedClusterArray.slice(1, 6)
     dataDisplayBoxArray.push(combinedClusterArray[7])
-    //console.log(dataDisplayBoxArray)
 
     let dataDisplayer = new cv.Mat()
     for (let i = 0; i < 6; i++) { //draw all 6 selected crops next to their data
@@ -471,9 +475,25 @@ async function scribeFile(filelist) {
         if (!hasLabel && !hasNum) { //delete if no number or label found
             console.log("no num or label found in " + ocrStringArray[index])
             //delete ocrStringArray[index];
+            //DELETION IS DISABLED FOR TESTING
         }
     })
     ocrStringArray = removeArrayHoles(ocrStringArray); //removing holes in array
+
+    //split ocr strings at first number to prevent reaching for the next label's value
+    let numSplitArray = []
+    for (let i = 0; i < ocrStringArray.length; i++) { //for each array entry
+        let ocrEntry = ocrStringArray[i]
+        let firstNumberPos = ocrEntry.search(/\d/); //find where the first number in it is
+        if (firstNumberPos > 0) { //if there is a number/the string doesn't start with a number
+            numSplitArray.push(ocrEntry.slice(0, firstNumberPos)) //add the part before the first number
+            numSplitArray.push(ocrEntry.slice(firstNumberPos)) //add the rest of it
+        } else {
+            numSplitArray.push(ocrEntry) //put the whole entry back in
+        }
+    }
+    ocrStringArray = numSplitArray
+    //console.log(ocrStringArray)
     
     //display results
     outputTextArea.value = ocrStringArray.toString().replaceAll(",", "\n");
