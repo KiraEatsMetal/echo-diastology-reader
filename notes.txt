@@ -1,10 +1,22 @@
 input: an image with a ton of numbers
 chart at https://www.asecho.org/wp-content/uploads/2025/07/Left-Ventricular-Diastolic-Function.pdf
+
 //==//
 
-features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles, chop image into separate labels and read those individually, spots data in the next string if label's string has no numbers, after recieving a value from ocr, process the value because it tends to drop decimal places, auto binary thresholding, levenshtein distance backup search, stops when boxes are too small, auto threshold selection,  display data from first image next to the matching labels
+features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles, chop image into separate labels and read those individually, spots data in the next string if label's string has no numbers, after recieving a value from ocr, process the value because it tends to drop decimal places, auto binary thresholding, levenshtein distance backup search, stops when boxes are too small, auto threshold selection,  display data from first image next to the matching labels,  try splitting data at first number to avoid overreading when blank
 
-features wanted: try splitting data at first number to avoid overreading when blank
+features wanted: batch processing
+
+imageInputElement changes (we have uploaded a new set of things to scan):
+set global image array to array of files
+set results to empty
+
+when the image array isn't empty:
+do stuff to the first image in it, then remove it
+after each image, add result to the results tracker
+loop
+
+//==//
 
 letters used in labels:
 acdefilmnoprstvxy

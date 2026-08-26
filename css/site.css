@@ -54,3 +54,7 @@
     width: 33%;
     height: auto;
   }
+
+  textarea {
+    width: 100%;
+  }

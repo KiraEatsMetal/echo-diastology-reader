@@ -1,94 +1,32 @@
 import scribe from './libraries/node_modules/scribe.js-ocr/scribe.js';
 
-function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI, TRVelocity, EA){
-    //console.log("RUNNING FLOWCHART")
-    let final = "ERROR";
-
-    let stageOneMarkerCount = 0;
-
-    let reducedEp = false
-    let EeHigh = false
-    let TRVelocityHigh = false
-
-    let isEALow = false
-    let isEAHigh = false
-
-    //graphic 1 marker checking, also marks stage 2 markers 1 and 2 if it finds them
-    if (epSeptal <= 6 || epLateral <= 7 || (epSeptal + epLateral) <= 13) {
-        stageOneMarkerCount += 1;
-        reducedEp = true
-        console.log("Reduced e' velocity (septal <= 6, lateral <= 7, or combined <= 13)");
-    }
-    if (averageEe > 14) {
-        stageOneMarkerCount += 1;
-        EeHigh = true
-        console.log("High average E/e' (>14)");
-    }
-    if (LAVI > 34) {
-        stageOneMarkerCount += 1;
-        console.log("High LAVI (>34)");
-    }
-    if (EA <= 0.8) {
-        stageOneMarkerCount += 1;
-        isEALow = true;
-        console.log("E/A low (<=0.8)");
-
-    } else if (EA >= 2) {
-        stageOneMarkerCount += 1;
-        isEAHigh = true
-        console.log("E/A high (>=2)");
-    }
-    
-    //stage 1 marker count
-    if (stageOneMarkerCount >= 2) {
-        console.log("dysfunction present,", stageOneMarkerCount, "markers found");
-        //found dysfunction, start checking graphic 2
-        
-        //graphic 2 marker 2 and 3 checking
-        if (EeSeptal >= 15 || EeLateral >= 13) {
-            EeHigh = true;
-        }
-        if (TRVelocity >= 2.8) {
-            TRVelocityHigh = true;
-        }
-        console.log("reduced e': " + reducedEp + ", E/e' high: " + EeHigh + ", TR velocity high: " + TRVelocityHigh);
-        console.log("is E/A high: " + isEAHigh + ", is E/A low: " + isEALow)
-
-        //graphic 2 solving
-        if (reducedEp && EeHigh && TRVelocityHigh) {
-            if (isEAHigh) {
-                final = "grade 3"
-            } else {
-                final = "grade 2"
-            }
-        } else if (EeHigh || TRVelocityHigh) {
-            final = "purple zone"
-        } else if (reducedEp) {
-            if (isEALow) {
-                final = "grade 1"
-            } else {
-                final = "purple zone"
-            }
-        } else {
-            final = "normal";
-        }
-    } else {
-        console.log("dysfunction NOT present,", stageOneMarkerCount, "marker found");
-        final = "normal";
-    }
-
-    console.log(final);
-    return final;
-}
 
 //prep for showing image upload and ocr results
 const imageInputElement = document.getElementById("ImageInput");
 const outputTextArea = document.getElementById("OCROutput");
+const batchOutputTextArea = document.getElementById("BatchOutput");
 const outputCanvas = document.getElementById("canvasOutput");
 const imageHolder = document.getElementById("imageSrc");
 
+let scanDataFilelist = [] //filelist identical to what was fed in, preserves filenames
+let readDataArray = [] //reset each loop
+let batchOutputArray = [] //REMOVE THIS
+let batchCounter = 0
+
 //things to search for
-const dataLabels = ["LVEF", "MVEEMean", "MVESeptal", "LAVolIndex", "MVELateral", "TRVelocity", "MVAVmax", "MVEA", "MVEVmax", "MVEESeptal", "MVEELateral"]
+const dataLabels = [
+    "LVEF",
+    "MVEEMean",
+    "MVESeptal",
+    "LAVolIndex",
+    "MVELateral",
+    "TRVelocity",
+    "MVAVmax",
+    "MVEA",
+    "MVEVmax",
+    "MVEESeptal",
+    "MVEELateral"
+]
 
 //key to match data labels to html input fields by id
 const dataLabelToHTMLIDTranslator = {        
@@ -103,14 +41,24 @@ const dataLabelToHTMLIDTranslator = {
 }
 
 /*==Image loading stuff==*/
-imageInputElement.addEventListener("change", async () => {
+imageInputElement.addEventListener("change", () => {
     if (!imageInputElement.files) return; //exit if no files uploaded
-    //console.log(imageInputElement.files);
-    imageHolder.src = URL.createObjectURL(imageInputElement.files[0]); //convert uploaded file to image source so opencv can read and process it
+
+    //console.log(imageInputElement.files)
+    //initial setup/resetting values
+    scanDataFilelist = imageInputElement.files
+    batchCounter = 0
+    batchOutputArray = []
+    //console.log(scanDataFilelist, batchCounter)
+
+    //kickstarts the loop
+    imageHolder.src = URL.createObjectURL(scanDataFilelist[0]); //convert uploaded file to image source so opencv can read and process it
+    //imageHolder.onload = test()
 
     console.log()
-    console.log(":: recieved image, starting scan");
+    console.log(":: recieved files, starting process");
     outputTextArea.value = "Loading...";
+    batchOutputTextArea.value = ""
 
     //clear current data labels
     dataLabels.forEach((dataLabel) => {
@@ -125,17 +73,21 @@ imageInputElement.addEventListener("change", async () => {
 
 /*==OpenCV stuff==*/
 //runs after you upload a file to the image input, specifically after that function feeds it to the image html element and it loads
-imageHolder.onload = async () => {
+imageHolder.onload = () => {
+    console.log(":: finished image loading")
     console.log()
-    console.log(":: starting opencv processing :: ", imageHolder, imageHolder.width, imageHolder.height);
+    console.log(":: starting opencv processing", imageHolder, imageHolder.width, imageHolder.height);
     
-    //imageHolder.width = imageHolder.width / 1; //halve image resolution for better ocr results
     let imageInput = cv.imread(imageHolder); //reads image from file to cv mat
-    //imageHolder.width = imageHolder.width * 1; //reset image resolution, otherwise subsequent uses have their resolution exponentially halved
-    imageHolder.src = null; // remove image source since we draw it in the canvas
+
+    batchCounter += 1 //tracks what image you're on in scanDataFilelist
+    readDataArray = [] //reset found data
+    imageHolder.src = null; //remove image source since we draw it in the canvas
+    //console.log(batchCounter, scanDataFilelist[batchCounter])
+
     
     //image adjustement parameters
-    let scaleSize = 1 //base val 0.5, controls resolution. scales a lot off of this.
+    let scaleSize = 0.5 //base val 0.5, controls resolution. scales a lot off of this.
     let blurSize = Math.round(scaleSize * 6) % 2 == 0 ? Math.round(scaleSize * 6) + 1 : Math.round(scaleSize * 6) //must be a positive odd int, base val 3. round up is safer.
     //removed to improve ocr results since we have newer systems handling thresholding and box detection 
     //let gapSizeX = Math.ceil(scaleSize * 1) //6
@@ -159,11 +111,12 @@ imageHolder.onload = async () => {
     //auto threshold adjuster
     let foundNineBoxes = false
     let thresholdCycleCounter = 0
-    let targetWhitePercent = 6 //compared to measured white percent, tried values: 7
+    let targetWhitePercent = 6 //compared to measured white percent, start at 6
 
     while (!foundNineBoxes && thresholdCycleCounter < 50) {
         thresholdCycleCounter += 1
         console.log("starting threshold and box detection cycle at", targetWhitePercent, "target white percent, cycle count:", thresholdCycleCounter)
+        if (thresholdCycleCounter == 50) {console.error("reached max threshold cycle")}
         //auto thresholding
         var thresholdImage = new cv.Mat();
         let thresholdRange = 255 //cannot be greater than 255, can be smaller though
@@ -192,8 +145,7 @@ imageHolder.onload = async () => {
         console.log("white pixel count: ", cv.countNonZero(thresholdImage), "image area: ", thresholdImage.cols*thresholdImage.rows, "\npercentage: ", Math.round(cv.countNonZero(thresholdImage) / (thresholdImage.cols*thresholdImage.rows) * 10000)/100 + "%", "threshold value:", binarySearchResult); //gets percentage of white in the image
         //imageInput = thresholdImage
 
-        //gap closing
-        //removed to improve ocr since our auto thresholder and gap closer can handle this
+        //gap closing removed to improve ocr since our auto thresholder and gap closer can handle this
         //let gapSize = new cv.Size(gapSizeX, gapSizeY)
         //cv.dilate(thresholdImage, thresholdImage, cv.getStructuringElement(cv.MORPH_RECT, gapSize)); //thickens lines, base val 3, 2. must be ints.
         //cv.erode(thresholdImage, thresholdImage, cv.getStructuringElement(cv.MORPH_RECT, gapSize)); //thins them, base val 3, 2. must be ints.
@@ -203,6 +155,7 @@ imageHolder.onload = async () => {
         let line_min_width_h = thresholdImage.rows/144 //82
         let line_min_width_v = thresholdImage.rows/75 //27, 35, 65
         console.log("image width:", thresholdImage.cols, "image height:", thresholdImage.rows, "\nmin line width/height:", line_min_width_h, line_min_width_v)
+
         //object that defines a horizontal line
         let kernal_h = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(line_min_width_h, 1)); //[[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
         //object that defines a vertical line
@@ -264,10 +217,10 @@ imageHolder.onload = async () => {
         }
 
         //grab the first 9 boxes that are small enough
-        let areaUpperBound = thresholdImage.cols*thresholdImage.rows/36;
-        let areaLowerBound = thresholdImage.cols*thresholdImage.rows/100;
-        let widthThreshold = thresholdImage.cols/3;
-        let heightThreshold = thresholdImage.rows/4;
+        let areaUpperBound = thresholdImage.cols*thresholdImage.rows/30; //36
+        let areaLowerBound = thresholdImage.cols*thresholdImage.rows/110; //110
+        let widthThreshold = thresholdImage.cols/2; //3
+        let heightThreshold = thresholdImage.rows/4; //4
         console.log("width, height, area image values:", thresholdImage.cols, thresholdImage.rows, thresholdImage.cols*thresholdImage.rows, "\nwidth, height, area upper/lower thresholds:", widthThreshold, heightThreshold, areaUpperBound, areaLowerBound)
 
         //image cropping from https://docs.opencv.org/3.4/js_basic_ops_roi.html
@@ -316,63 +269,9 @@ imageHolder.onload = async () => {
         croppedMat.delete();
         img_bin_final.delete();
     }
-    
-    //drawing data next to manual data inputs
-    let xArray = [] //array of x values to sort
-    //sub arrays for sorting
-    let fourClusterArray = []
-    let threeClusterArray = []
-    let twoClusterArray = []
-
-    //arrays for getting a box index from an x or y value, can't use dicts due to potential duplicate values
-    let xKeys = [] //single use key index storage, make a copy if you need to use it multiple times
-    let yKeys = [] //single use key index storage, make a copy if you need to use it multiple times
-
-    for (let i = 0; i < drawnBoxesArray.length; i++) {
-        console.log(drawnBoxesArray[i])
-        const x = drawnBoxesArray[i].x
-        const y = drawnBoxesArray[i].y
-        xArray.push(x) //add x position to array
-
-        //can't use a dict for x due to occasional duplicate values
-        xKeys.push(x) //add x pos as key, its index as the value
-        yKeys.push(y) //add x pos as key, its index as the value
-    }
-    xArray.sort(function(a, b){return a - b}) //sort array of x positions from small to large
-    //console.log(xKeys)
-
-    //populate sub arrays with y values
-    for (let i = 0; i < 4; i++) {let key = xKeys.indexOf(xArray[i]); fourClusterArray.push(drawnBoxesArray[key].y); xKeys[key] = null}
-    for (let i = 4; i < 7; i++) {let key = xKeys.indexOf(xArray[i]); threeClusterArray.push(drawnBoxesArray[key].y); xKeys[key] = null}
-    for (let i = 7; i < 9; i++) {let key = xKeys.indexOf(xArray[i]); twoClusterArray.push(drawnBoxesArray[key].y); xKeys[key] = null}
-
-    //sort them all from small to large
-    fourClusterArray.sort(function(a, b){return a - b})
-    threeClusterArray.sort(function(a, b){return a - b})
-    twoClusterArray.sort(function(a, b){return a - b})
-
-    let combinedClusterArray = fourClusterArray.concat(threeClusterArray, twoClusterArray) //combined array of y values
-
-    for (let i = 0; i < combinedClusterArray.length; i++) {
-        let key = yKeys.indexOf(combinedClusterArray[i]);
-        combinedClusterArray[i] = drawnBoxesArray[key] //replace every y pos value with its matching box, producing an array of organized boxes
-        yKeys[key] = null
-    }
-
-    //boxes we want: 2, 3, 4, 5, 6, 8
-    let dataDisplayBoxArray = combinedClusterArray.slice(1, 6)
-    dataDisplayBoxArray.push(combinedClusterArray[7])
-
-    let dataDisplayer = new cv.Mat()
-    for (let i = 0; i < 6; i++) { //draw all 6 selected crops next to their data
-        dataDisplayer = thresholdImage.roi(dataDisplayBoxArray[i])
-        //console.log("dataDisplay" + (i + 1), dataDisplayer, dataDisplayer)
-        cv.imshow("dataDisplay" + (i + 1), dataDisplayer); //draw to canvas
-    }
 
 
     let fileArray = []
-    
     //creates image file from main canvas output, then feeds file to scribe
     //if you want to use this in addition to the other stuff, remove the -1 from i == drawnBoxes - 1
     /*
@@ -386,7 +285,6 @@ imageHolder.onload = async () => {
         //scribeFile([file]) //old, kept for reference
     }, "image/png")
     */
-
     //creates image files from cropped canvas outputs, then feeds array of files to scribe
     for (let i = 0; i < drawnBoxes; i++) {
         outputCanvasArray[i].toBlob(function(blob) {
@@ -399,6 +297,7 @@ imageHolder.onload = async () => {
         }, "image/png")
     }
 
+    console.log("test")
 
     //remove connectedComponentsWithStats output variables
     stats.delete();
@@ -419,6 +318,9 @@ async function scribeFile(filelist) {
     //import and read files
     console.log()
     console.log(":: scribing files")
+    //console.log(filelist)
+    filelist.sort(function(a, b) {return a.name.localeCompare(b.name)})
+    //console.log(filelist)
     await scribe.importFiles(filelist);
 
     await scribe.recognize(ocrParams.langs);
@@ -494,6 +396,17 @@ async function scribeFile(filelist) {
     }
     ocrStringArray = numSplitArray
     //console.log(ocrStringArray)
+
+    //get an ordered list of just the text, no numbers
+    //used for finding which canvas the label you read came from
+    let ocrStringArrayNoNum = []
+    for (let i = 0; i < ocrStringArray.length; i++) { //per entry
+        let firstNumberPos = ocrStringArray[i].search(/\d/)
+        if (firstNumberPos < 0) { //if there is no number
+            ocrStringArrayNoNum.push(ocrStringArray[i])
+        }
+    }
+    //console.log(ocrStringArrayNoNum)
     
     //display results
     outputTextArea.value = ocrStringArray.toString().replaceAll(",", "\n");
@@ -504,6 +417,15 @@ async function scribeFile(filelist) {
             document.getElementById(dataLabelToHTMLIDTranslator[dataLabel]).value = null;
         }
     })
+
+    const dataLabelToDLDisplay = {
+        "MVEEMean": 1,
+        "MVESeptal": 2,
+        "LAVolIndex": 3,
+        "MVELateral": 4,
+        "TRVelocity": 5,
+        "MVEA": 6
+    }
 
     //create array to track which strings were used or not
     let usedStringTracker = []
@@ -520,7 +442,12 @@ async function scribeFile(filelist) {
             if (foundValue) {return}
             
             if (ocrEntry.match(new RegExp(dataLabel, "i"))) { //if data label found
-                //console.log("found", dataLabel, "in", ocrEntry)
+                console.log(ocrEntry, "box" + (ocrStringArrayNoNum.indexOf(ocrEntry)))
+                if (ocrStringArrayNoNum.indexOf(ocrEntry) > -1) {
+                    let dataLabelDisplay = cv.imread(document.getElementById("box" + (ocrStringArrayNoNum.indexOf(ocrEntry)))) //get the image from the canvas of the entry you read
+                    if (dataLabelToDLDisplay[dataLabel]) {cv.imshow("dataDisplay" + dataLabelToDLDisplay[dataLabel], dataLabelDisplay)} //display to matching label
+                }
+
                 removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
 
                 let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(dataLabel, "i")))); //start number search after the location of the found label
@@ -557,7 +484,12 @@ async function scribeFile(filelist) {
                     if (foundValue) {return}
 
                     if (ocrEntry.match(new RegExp(labelFragment, "i"))) { //if we find a fragment
-                        //console.log("found", dataLabel, "from fragment", labelFragment, "in", ocrEntry)
+                        console.log(ocrEntry, "box" + (ocrStringArrayNoNum.indexOf(ocrEntry)))
+                        if (ocrStringArrayNoNum.indexOf(ocrEntry) > -1) {
+                            let dataLabelDisplay = cv.imread(document.getElementById("box" + (ocrStringArrayNoNum.indexOf(ocrEntry)))) //get the image from the canvas of the entry you read
+                            if (dataLabelToDLDisplay[dataLabel]) {cv.imshow("dataDisplay" + dataLabelToDLDisplay[dataLabel], dataLabelDisplay)} //display to matching label
+                        }
+
                         removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
 
                         let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(new RegExp(labelFragment, "i")))); //start number search after the location of the fragment
@@ -605,7 +537,12 @@ async function scribeFile(filelist) {
 
                 //console.log("lev distance of", dataLabel, "and", labelSlice, "is", levenshteinDistance(dataLabel, labelSlice))
                 if (levenshteinDistance(dataLabel, labelSlice) < 2) {
-                    //console.log("lev distance of", dataLabel, "and", labelSlice, "is", levenshteinDistance(dataLabel, labelSlice))
+                    console.log(ocrEntry, "box" + (ocrStringArrayNoNum.indexOf(ocrEntry)))
+                    if (ocrStringArrayNoNum.indexOf(ocrEntry) > -1) {
+                        let dataLabelDisplay = cv.imread(document.getElementById("box" + (ocrStringArrayNoNum.indexOf(ocrEntry)))) //get the image from the canvas of the entry you read
+                        if (dataLabelToDLDisplay[dataLabel]) {cv.imshow("dataDisplay" + dataLabelToDLDisplay[dataLabel], dataLabelDisplay)} //display to matching label
+                    }
+                    
                     removeArrayEntry(labelNotFound, dataLabel); //remove label from unfound labels array
                     
                     let foundNumber = findFirstNumberInString(ocrEntry.slice(ocrEntry.search(/\d/))); //start number search after the location of the found label
@@ -694,8 +631,200 @@ async function scribeFile(filelist) {
 }
 /*==end of Scribe stuff and word proccessing==*/
 
+/*==Get and send input data to the flowchart solver, display results==*/
+function update() {
+    let finalResult, warningResult
+    const warningArray = []
 
+    //all variables and their html input ids
+    const variableInput = {
+        epSeptal: "epSeptal",
+        epLateral: "epLateral",
+        EeSeptal: "EeSeptal",
+        EeLateral: "EeLateral",
+        averageEe: "averageEe",
+        LAVI: "LAVI",
+        TRVelocity: "TRVelocity",
+        EA: "EA"
+    }
+    
+    const warningTranslation = {
+        epSeptal: "e' Septal",
+        epLateral: "e' Lateral",
+        EeSeptal: "E/e' Septal",
+        EeLateral: "E/e' Lateral",
+        averageEe: "average E/e'",
+        LAVI: "LA Velo Index",
+        TRVelocity: "TR Velocity",
+        EA: "E/A"
+    }
+
+    console.log();
+    console.log(":: running flowchart");
+    //get and assign for each variable
+
+    let value
+    for (const key of Object.keys(variableInput)) {
+        value = document.getElementById(variableInput[key]).value
+
+        //console.log(value, value == "", Number(value), Number.isNaN(Number(value)))
+        if (value == "" || Number.isNaN(Number(value))) {
+            console.error(variableInput[key] + " undefined")
+            //if the value isn't a valid number, ex: empty or is words instead, add warning
+            warningArray.push(variableInput[key]);
+            variableInput[key] = 0;
+            if (key != "EeSeptal" && key != "EeLateral") {readDataArray.push(key+" N/A  ")}
+        } else {
+            console.log(variableInput[key] + " defined and a number: " + Number(value))
+            variableInput[key] = Number(value);
+            readDataArray.push(key+" "+value.toString().padEnd(5, " "))
+        }
+    }
+
+    finalResult = runFlowChart(variableInput["epSeptal"]*100, variableInput["epLateral"]*100, variableInput["EeSeptal"], variableInput["EeLateral"], variableInput["averageEe"], variableInput["LAVI"], variableInput["TRVelocity"], variableInput["EA"]);
+
+    //display missing variable warnings
+    let warning = document.getElementById("warnings");
+    if (warningArray.length > 0) {
+        warningResult = "Warning, missing: ";
+        warningArray.forEach(element => {
+            warningResult += warningTranslation[element] + ", ";
+        });
+        warningResult = warningResult.slice(0, warningResult.length - 2)
+        warning.innerHTML = warningResult;
+    }
+
+    //show the result
+    let output = document.getElementById("output");
+    output.innerHTML = finalResult;
+
+    readDataArray.push(scanDataFilelist[batchCounter - 1].name)
+    readDataArray.unshift(finalResult)
+    batchOutputArray.push(readDataArray)
+
+    //batchOutputTextArea.value += finalResult + " " + scanDataFilelist[batchCounter - 1].name + "\n"
+    let finalOutput = readDataArray.join(" | ")
+    batchOutputTextArea.value += finalOutput + "\n"
+    console.log(":: flowchart ran")
+
+    //start loop again
+    if (batchCounter < scanDataFilelist.length) {imageHolder.src = URL.createObjectURL(scanDataFilelist[batchCounter]);}
+    else { //if done with all images
+        console.log(":: scanned all images")
+        batchOutputArray.sort(function(a, b){ //sort data by filename
+            let result
+            let aSlice = a[a.length-1].slice(0, a[a.length-1].lastIndexOf(".")) //get file name without extension
+            let bSlice = b[b.length-1].slice(0, b[b.length-1].lastIndexOf(".")) //this makes different extension lengths not mess with sorting, ex: 11.jpeg and 12.png turn into 11 and 12 so the extra length of 11.jpeg doesn't put it behind 12.png
+            if (aSlice.length != bSlice.length) {result = (aSlice.length < bSlice.length) ? -1 : 1} //if strings are of different length, sort longer string last. this is so 13 is not before 2 alphabetically.
+            else {result = aSlice.localeCompare(bSlice)} //alphabetical compare
+            return result
+        })
+        for (let i = 0; i < batchOutputArray.length; i++) {
+            batchOutputArray[i] = batchOutputArray[i].join(" | ") //convert every entry to a string with some nice formatting
+        }
+        batchOutputTextArea.value = batchOutputArray.join("\n") //convert to string, separate entries with a new line, display
+    }
+}
+/*==end==*/
+
+/*==Echo diastology flowchart solving==*/
+function runFlowChart(epSeptal, epLateral, EeSeptal, EeLateral, averageEe, LAVI, TRVelocity, EA){
+    //console.log("RUNNING FLOWCHART")
+    let final = "ERROR";
+
+    let stageOneMarkerCount = 0;
+
+    let reducedEp = false
+    let EeHigh = false
+    let TRVelocityHigh = false
+
+    let isEALow = false
+    let isEAHigh = false
+
+    let gradeOneStr   = "Grade 1                          "
+    let gradeTwoStr   = "Grade 2                          "
+    let gradeThreeStr = "Grade 3                          "
+    let purpleZoneStr = "Purple zone! human input required"
+    let normalStr     = "Normal readings                  "
+
+    //graphic 1 marker checking, also marks stage 2 markers 1 and 2 if it finds them
+    if (epSeptal <= 6 || epLateral <= 7 || (epSeptal + epLateral) <= 13) {
+        stageOneMarkerCount += 1;
+        reducedEp = true
+        console.log("Reduced e' velocity (septal <= 6, lateral <= 7, or combined <= 13)");
+    }
+    if (averageEe > 14) {
+        stageOneMarkerCount += 1;
+        EeHigh = true
+        console.log("High average E/e' (>14)");
+    }
+    if (LAVI > 34) {
+        stageOneMarkerCount += 1;
+        console.log("High LAVI (>34)");
+    }
+    if (EA <= 0.8) {
+        stageOneMarkerCount += 1;
+        isEALow = true;
+        console.log("E/A low (<=0.8)");
+
+    } else if (EA >= 2) {
+        stageOneMarkerCount += 1;
+        isEAHigh = true
+        console.log("E/A high (>=2)");
+    }
+    
+    //stage 1 marker count
+    if (stageOneMarkerCount >= 2) {
+        console.log("dysfunction present,", stageOneMarkerCount, "markers found");
+        //found dysfunction, start checking graphic 2
+        
+        //graphic 2 marker 2 and 3 checking
+        if (EeSeptal >= 15 || EeLateral >= 13) {
+            EeHigh = true;
+        }
+        if (TRVelocity >= 2.8) {
+            TRVelocityHigh = true;
+        }
+        console.log("reduced e': " + reducedEp + ", E/e' high: " + EeHigh + ", TR velocity high: " + TRVelocityHigh);
+        console.log("is E/A high: " + isEAHigh + ", is E/A low: " + isEALow)
+
+        //graphic 2 solving
+        if (reducedEp && EeHigh && TRVelocityHigh) {
+            if (isEAHigh) {
+                final = gradeThreeStr
+            } else {
+                final = gradeTwoStr
+            }
+        } else if (EeHigh || TRVelocityHigh) {
+            final = purpleZoneStr
+        } else if (reducedEp) {
+            if (isEALow) {
+                final = gradeOneStr
+            } else {
+                final = purpleZoneStr
+            }
+        } else {
+            final = normalStr;
+        }
+    } else {
+        console.log("dysfunction NOT present,", stageOneMarkerCount, "marker found");
+        final = normalStr;
+    }
+
+    console.log(final);
+    return final;
+}
+/*==end of echo diastology flowchart solving==*/
+
+
+//helper functions
+/*
+async function test() {
+    console.log("test complete")
+}
+*/
 //from: https://www.30secondsofcode.org/js/s/levenshtein-distance/
+//finds the levenshtein distance (min # of changes needed to transform one str into the other) between two strings
 const levenshteinDistance = (stringOne, stringtwo) => {
   if (!stringOne.length) return stringtwo.length;
   if (!stringtwo.length) return stringOne.length;
@@ -767,74 +896,5 @@ function removeArrayEntry(array, entry) {
 }
 
 //read button click in module
-const buttonElement = /** @type {HTMLInputElement} */ (document.getElementById('inputButton'));;
-//console.log(buttonElement)
-buttonElement.addEventListener("click", update)
-
-function update() {
-    let finalResult, warningResult
-    const warningArray = []
-
-    //all variables and their html input ids
-    const variableInput = {
-        epSeptal: "epSeptal",
-        epLateral: "epLateral",
-        EeSeptal: "EeSeptal",
-        EeLateral: "EeLateral",
-        averageEe: "averageEe",
-        LAVI: "LAVI",
-        TRVelocity: "TRVelocity",
-        EA: "EA"
-    }
-    
-    const warningTranslation = {
-        epSeptal: "e' Septal",
-        epLateral: "e' Lateral",
-        EeSeptal: "E/e' Septal",
-        EeLateral: "E/e' Lateral",
-        averageEe: "average E/e'",
-        LAVI: "LA Velo Index",
-        TRVelocity: "TR Velocity",
-        EA: "E/A"
-    }
-
-    console.log();
-    console.log(":: running flowchart");
-    //get and assign for each variable
-    let value
-    for (const key of Object.keys(variableInput)) {
-        value = document.getElementById(variableInput[key]).value
-
-        //console.log(value, value == "", Number(value), Number.isNaN(Number(value)))
-        if (value == "" || Number.isNaN(Number(value))) {
-            console.error(variableInput[key] + " undefined")
-            //if the value isn't a valid number, ex: empty or is words instead, add warning
-            warningArray.push(variableInput[key]);
-            variableInput[key] = 0;
-        } else {
-            console.log(variableInput[key] + " defined and a number: " + Number(value))
-            variableInput[key] = Number(value);
-        }
-    }
-    
-    //console.log(variableInput["epSeptal"], variableInput["epLateral"], variableInput["EeSeptal"], variableInput["EeLateral"], variableInput["averageEe"], variableInput["LAVI"], variableInput["TRVelocity"], variableInput["EA"]);
-    //console.log();
-
-    finalResult = runFlowChart(variableInput["epSeptal"]*100, variableInput["epLateral"]*100, variableInput["EeSeptal"], variableInput["EeLateral"], variableInput["averageEe"], variableInput["LAVI"], variableInput["TRVelocity"], variableInput["EA"]);
-
-    //display missing variable warnings
-    let warning = document.getElementById("warnings");
-    if (warningArray.length > 0) {
-        warningResult = "Warning, missing: ";
-        warningArray.forEach(element => {
-            warningResult += warningTranslation[element] + ", ";
-        });
-        warningResult = warningResult.slice(0, warningResult.length - 2)
-        warning.innerHTML = warningResult;
-    }
-
-    //show the result
-    let output = document.getElementById("output");
-    output.innerHTML = finalResult;
-    console.log(":: flowchart ran")
-}
+const buttonElement = /** @type {HTMLInputElement} */ (document.getElementById('inputButton'));
+buttonElement.addEventListener("click", update);

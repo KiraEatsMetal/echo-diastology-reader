@@ -8,11 +8,11 @@
     <script src="js/echo-d-math.js" type="module" defer></script>
 </head>
 <body>
-    <h1>Echo Diastology Flowchart Solver V1.2.6</h1>
+    <h1>Echo Diastology Flowchart Solver V1.2.7</h1>
     <h2>Enter parameters:</h2>
 
     <label for="ImageInput">OCR Image Input:</label><br>
-    <input type="file" id="ImageInput" name="ImageInput"><br>
+    <input type="file" id="ImageInput" name="ImageInput" multiple><br>
     <textarea id="OCROutput"></textarea><br>
 
     <label for="averageEe">average E/e':</label><br>
@@ -35,7 +35,8 @@
     <br><button id="inputButton">Calculate</button><br>
 
     <div id="warnings">no warnings</div>
-    <div id="output">output</div>
+    <div id="output">output</div><br>
+    <textarea id="BatchOutput"></textarea><br>
     <img id="imageSrc" alt=""/>
     <canvas id="canvasOutput" width="15" height="1"></canvas>
     <canvas id="debugCanvasOutputOne" width="15" height="1"></canvas>
