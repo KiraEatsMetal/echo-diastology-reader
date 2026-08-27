@@ -590,41 +590,17 @@ async function scribeFile(filelist) {
 
     //adjust set values to account for missed decimals
     //average ee
-    let averageEeVal = document.getElementById("averageEe").value
-    while (averageEeVal > 30) {
-        averageEeVal = averageEeVal/10
-        document.getElementById("averageEe").value = Math.round(averageEeVal * 100)/100
-    }
+    adjustInputDecimal("averageEe", 30, 10)
     //e septal
-    let eSeptalVal = document.getElementById("epSeptal").value
-    while (eSeptalVal > 0.4) {
-        eSeptalVal = eSeptalVal/10
-        document.getElementById("epSeptal").value = Math.round(eSeptalVal * 100)/100
-    }
+    adjustInputDecimal("epSeptal", 0.4, 10)
     //lavi
-    let laviVal = document.getElementById("LAVI").value
-    while (laviVal > 100) {
-        laviVal = laviVal/10
-        document.getElementById("LAVI").value = Math.round(laviVal * 100)/100
-    }
+    adjustInputDecimal("LAVI", 100, 10)
     //e lateral
-    let eLateralVal = document.getElementById("epLateral").value
-    while (eLateralVal > 0.4) {
-        eLateralVal = eLateralVal/10
-        document.getElementById("epLateral").value = Math.round(eLateralVal * 100)/100
-    }
+    adjustInputDecimal("epLateral", 0.4, 10)
     //tr velocity
-    let trVeloVal = document.getElementById("TRVelocity").value
-    while (trVeloVal > 10) {
-        trVeloVal = trVeloVal/10
-        document.getElementById("TRVelocity").value = Math.round(trVeloVal * 100)/100
-    }
+    adjustInputDecimal("TRVelocity", 10, 10)
     //e/a
-    let eaValue = document.getElementById("EA").value
-    while (eaValue > 5) {
-        eaValue = eaValue/10
-        document.getElementById("EA").value = Math.round(eaValue * 100)/100
-    }
+    adjustInputDecimal("EA", 5, 10)
 
     console.log(":: text processed")
     update(); //run flowchart
@@ -893,6 +869,16 @@ function removeArrayHoles(array) {
 function removeArrayEntry(array, entry) {
     let index = array.indexOf(entry, array);
     if (index > -1) {array.splice(index, 1)}
+}
+
+//takes an element id, a threshold, and a dividend. divides element id value by dividend until below threshold, sets value.
+function adjustInputDecimal (elementID, threshold, dividend) {
+    if (typeof(elementID) != 'string') {return}
+    let elementValue = document.getElementById(elementID).value //get value
+    while (elementValue > threshold) { //divide until below threshold
+        elementValue = elementValue/dividend
+    }
+    document.getElementById(elementID).value = Math.trunc(elementValue * 100)/100 //set element.value to result, cropped to two decimals
 }
 
 //read button click in module
