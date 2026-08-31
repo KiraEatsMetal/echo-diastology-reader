@@ -9,8 +9,8 @@ const outputCanvas = document.getElementById("canvasOutput");
 const imageHolder = document.getElementById("imageSrc");
 
 let scanDataFilelist = [] //filelist identical to what was fed in, preserves filenames
-let readDataArray = [] //reset each loop
-let batchOutputArray = [] //REMOVE THIS
+let readDataArray = [] //reset on update, tracks data grabbed from the thing
+let batchOutputArray = [] //reset on update, 
 let batchCounter = 0
 
 //things to search for
@@ -40,6 +40,42 @@ const dataLabelToHTMLIDTranslator = {
     MVEELateral: "EeLateral",
 }
 
+const answerKey = 
+`Purple zone! human input required | epSeptal 0.04  | epLateral 0.05  | averageEe 24.22 | LAVI 26.3  | TRVelocity N/A   | EA 1     | 1.png
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.05  | averageEe 24.22 | LAVI 26.3  | TRVelocity N/A   | EA 1     | 2.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 6.12  | LAVI 22.8  | TRVelocity 2.61  | EA 1.02  | 3.png
+Normal readings                   | epSeptal 0.16  | epLateral 0.14  | averageEe 5.87  | LAVI 22.8  | TRVelocity 2.4   | EA 1.57  | 4.png
+Normal readings                   | epSeptal 0.11  | epLateral 0.14  | averageEe 8.96  | LAVI 34.8  | TRVelocity 3.16  | EA 1.42  | 5.png
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.08  | averageEe 13    | LAVI 39.2  | TRVelocity 2.87  | EA N/A   | 6.png
+Purple zone! human input required | epSeptal 0.05  | epLateral 0.08  | averageEe 7.85  | LAVI 26.9  | TRVelocity 3.02  | EA 0.69  | 7.png
+Purple zone! human input required | epSeptal 0.05  | epLateral 0.06  | averageEe 17.64 | LAVI 36.7  | TRVelocity N/A   | EA 0.92  | 8.png
+Normal readings                   | epSeptal 0.06  | epLateral 0.07  | averageEe 10.31 | LAVI 30.3  | TRVelocity 2.84  | EA 0.89  | 9.png
+Normal readings                   | epSeptal 0.06  | epLateral 0.1   | averageEe 10.38 | LAVI 20    | TRVelocity 2.19  | EA 0.84  | 10.png
+Normal readings                   | epSeptal 0.17  | epLateral 0.32  | averageEe 3.27  | LAVI 20.7  | TRVelocity 2.37  | EA 2     | 11.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 13.88 | LAVI 33.5  | TRVelocity 3.43  | EA 1.27  | 12.png
+Normal readings                   | epSeptal 0.07  | epLateral 0.15  | averageEe 6.27  | LAVI 27.4  | TRVelocity 2.4   | EA 0.91  | 13.png
+Normal readings                   | epSeptal 0.09  | epLateral 0.12  | averageEe 5.9   | LAVI 18.1  | TRVelocity N/A   | EA 1.03  | 14.png
+Normal readings                   | epSeptal 0.11  | epLateral 0.11  | averageEe 7.45  | LAVI 20.2  | TRVelocity 2.78  | EA 0.86  | 15.png
+Normal readings                   | epSeptal 0.06  | epLateral 0.07  | averageEe 13.08 | LAVI 31.9  | TRVelocity 3.06  | EA 0.93  | 16.png
+Purple zone! human input required | epSeptal 0.08  | epLateral 0.08  | averageEe 17.5  | LAVI 43.2  | TRVelocity 2.82  | EA 0.84  | 18.png
+Grade 1                           | epSeptal 0.06  | epLateral 0.07  | averageEe 10.46 | LAVI 30.1  | TRVelocity 1.6   | EA 0.65  | 20.png
+Normal readings                   | epSeptal 0.07  | epLateral 0.06  | averageEe 10.15 | LAVI 17.5  | TRVelocity N/A   | EA 0.85  | 21.png
+Normal readings                   | epSeptal 0.11  | epLateral 0.08  | averageEe 6.95  | LAVI 18    | TRVelocity 2.71  | EA 1.32  | 22.png
+Normal readings                   | epSeptal 0.1   | epLateral 0.15  | averageEe 8.32  | LAVI 45.7  | TRVelocity 2.66  | EA N/A   | 23.png
+Purple zone! human input required | epSeptal 0.06  | epLateral 0.06  | averageEe 19.67 | LAVI 52    | TRVelocity 2.57  | EA 0.76  | 24.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 12.94 | LAVI 34    | TRVelocity 2.89  | EA 1.02  | 25.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.11  | averageEe 10    | LAVI 14.5  | TRVelocity 2.54  | EA 1.22  | IMG_0141.jpg
+Normal readings                   | epSeptal 0.07  | epLateral 0.09  | averageEe 6.62  | LAVI 24.2  | TRVelocity 2.33  | EA 0.62  | IMG_0144.jpg
+Normal readings                   | epSeptal 0.14  | epLateral 0.22  | averageEe 4.61  | LAVI 14.5  | TRVelocity 2.12  | EA 1.6   | IMG_0145.jpg
+Purple zone! human input required | epSeptal 0.07  | epLateral 0.12  | averageEe 8.42  | LAVI 42.5  | TRVelocity 2.8   | EA 2.16  | IMG_1455.jpg
+Purple zone! human input required | epSeptal 0.07  | epLateral 0.08  | averageEe 14.4  | LAVI 23.1  | TRVelocity 2.56  | EA 0.64  | IMG_1456.jpg
+Grade 1                           | epSeptal 0.05  | epLateral 0.06  | averageEe 10.91 | LAVI 46.9  | TRVelocity 1.36  | EA 0.57  | IMG_1457.jpg
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 12    | LAVI 31.3  | TRVelocity 2.86  | EA 1.04  | IMG_1559.jpg
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.07  | averageEe 18.36 | LAVI 40.1  | TRVelocity 2.56  | EA 0.98  | IMG_1568.jpg
+Grade 1                           | epSeptal 0.04  | epLateral 0.05  | averageEe 11.33 | LAVI 27.5  | TRVelocity 2.74  | EA 0.56  | IMG_1569.jpg
+Normal readings                   | epSeptal 0.06  | epLateral 0.07  | averageEe 10.31 | LAVI 30.3  | TRVelocity 2.84  | EA 0.89  | IMG_7381.jpg
+Normal readings                   | epSeptal 0.08  | epLateral 0.11  | averageEe 10    | LAVI 23.8  | TRVelocity 2.55  | EA 1.22  | IMG_0141CROPPED.png`
+
 /*==Image loading stuff==*/
 imageInputElement.addEventListener("change", () => {
     if (!imageInputElement.files) return; //exit if no files uploaded
@@ -49,7 +85,6 @@ imageInputElement.addEventListener("change", () => {
     scanDataFilelist = imageInputElement.files
     batchCounter = 0
     batchOutputArray = []
-    //console.log(scanDataFilelist, batchCounter)
 
     //kickstarts the loop
     imageHolder.src = URL.createObjectURL(scanDataFilelist[0]); //convert uploaded file to image source so opencv can read and process it
@@ -81,14 +116,14 @@ imageHolder.onload = () => {
     let imageInput = cv.imread(imageHolder); //reads image from file to cv mat
 
     batchCounter += 1 //tracks what image you're on in scanDataFilelist
-    readDataArray = [] //reset found data
     imageHolder.src = null; //remove image source since we draw it in the canvas
     //console.log(batchCounter, scanDataFilelist[batchCounter])
 
     
     //image adjustement parameters
     let scaleSize = 0.5 //base val 0.5, controls resolution. scales a lot off of this.
-    let blurSize = Math.round(scaleSize * 6) % 2 == 0 ? Math.round(scaleSize * 6) + 1 : Math.round(scaleSize * 6) //must be a positive odd int, base val 3. round up is safer.
+    let blurScale = 6
+    let blurSize = Math.round(scaleSize * blurScale) % 2 == 0 ? Math.round(scaleSize * blurScale) + 1 : Math.round(scaleSize * blurScale) //must be a positive odd int, base val 3. round up is safer.
     //removed to improve ocr results since we have newer systems handling thresholding and box detection 
     //let gapSizeX = Math.ceil(scaleSize * 1) //6
     //let gapSizeY = Math.ceil(scaleSize * 1) //4
@@ -406,7 +441,7 @@ async function scribeFile(filelist) {
             ocrStringArrayNoNum.push(ocrStringArray[i])
         }
     }
-    //console.log(ocrStringArrayNoNum)
+    console.log(ocrStringArrayNoNum)
     
     //display results
     outputTextArea.value = ocrStringArray.toString().replaceAll(",", "\n");
@@ -611,6 +646,7 @@ async function scribeFile(filelist) {
 function update() {
     let finalResult, warningResult
     const warningArray = []
+    readDataArray = []
 
     //all variables and their html input ids
     const variableInput = {
@@ -674,7 +710,8 @@ function update() {
     let output = document.getElementById("output");
     output.innerHTML = finalResult;
 
-    readDataArray.push(scanDataFilelist[batchCounter - 1].name)
+    if (scanDataFilelist[Math.max(0, batchCounter - 1)]) {readDataArray.push(scanDataFilelist[Math.max(0, batchCounter - 1)].name)} //if the image has a name, push that
+    else {readDataArray.push("N/A")} //otherwise push n/a. only happens if you click calculate without uploading an image
     readDataArray.unshift(finalResult)
     batchOutputArray.push(readDataArray)
 
@@ -696,9 +733,30 @@ function update() {
             return result
         })
         for (let i = 0; i < batchOutputArray.length; i++) {
-            batchOutputArray[i] = batchOutputArray[i].join(" | ") //convert every entry to a string with some nice formatting
+            if (typeof(batchOutputArray[i]) != "string") {batchOutputArray[i] = batchOutputArray[i].join(" | ")} //convert every entry to a string with some nice formatting
         }
         batchOutputTextArea.value = batchOutputArray.join("\n") //convert to string, separate entries with a new line, display
+        let answerKeyArray = answerKey.split("\n")
+        console.table([batchOutputArray, answerKeyArray]) //logs output table and compares to manually created answer key
+        let wrongCounter = 0 //track amount of wrong reads
+        let wrongTracker = [] //track names of misreads
+        for (let i = 0; i < batchOutputArray.length; i++) {
+            if (batchOutputArray[i] != answerKeyArray[i]) {
+                wrongCounter += 1
+                let splitOutput = batchOutputArray[i].split(" | ")
+                let splitAnswer = answerKeyArray[i].split(" | ")
+                wrongTracker.push(splitOutput[splitOutput.length - 1])
+                console.warn(":: output mismatch at", splitOutput[splitOutput.length - 1])
+                for (let i = 0; i< splitOutput.length; i++) {
+                    if (splitOutput[i] != splitAnswer[i]) {
+                        console.log("incorrect:", splitOutput[i], "\nexpected:", splitAnswer[i])
+                    }
+                }
+                console.log(batchOutputArray[i], "\n", answerKeyArray[i])
+            }
+        }
+        console.log("wrong counter:", wrongCounter)
+        console.log("wrong reads:", wrongTracker.join(", "))
     }
 }
 /*==end==*/
@@ -799,6 +857,7 @@ async function test() {
     console.log("test complete")
 }
 */
+
 //from: https://www.30secondsofcode.org/js/s/levenshtein-distance/
 //finds the levenshtein distance (min # of changes needed to transform one str into the other) between two strings
 const levenshteinDistance = (stringOne, stringtwo) => {
@@ -878,9 +937,15 @@ function adjustInputDecimal (elementID, threshold, dividend) {
     while (elementValue > threshold) { //divide until below threshold
         elementValue = elementValue/dividend
     }
-    document.getElementById(elementID).value = Math.trunc(elementValue * 100)/100 //set element.value to result, cropped to two decimals
+    if (elementValue != "") { document.getElementById(elementID).value = Math.trunc(Math.round(elementValue * 100))/100 } //set element.value to result, cropped to two decimals
 }
 
+function manualUpdate () {
+    batchOutputTextArea.value = ""
+    batchOutputArray = []
+    console.log(":: manual click update")
+    update()
+}
 //read button click in module
 const buttonElement = /** @type {HTMLInputElement} */ (document.getElementById('inputButton'));
-buttonElement.addEventListener("click", update);
+buttonElement.addEventListener("click", manualUpdate);

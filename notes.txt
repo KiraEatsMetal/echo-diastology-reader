@@ -3,18 +3,72 @@ chart at https://www.asecho.org/wp-content/uploads/2025/07/Left-Ventricular-Dias
 
 //==//
 
-features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles, chop image into separate labels and read those individually, spots data in the next string if label's string has no numbers, after recieving a value from ocr, process the value because it tends to drop decimal places, auto binary thresholding, levenshtein distance backup search, stops when boxes are too small, auto threshold selection,  display data from first image next to the matching labels,  try splitting data at first number to avoid overreading when blank
+features done: flowchart solver, manual input, image uploading, display uploaded image, read uploaded image, process image, scan read result for values and input them to the html, spot rectangles, chop image into separate labels and read those individually, spots data in the next string if label's string has no numbers, after recieving a value from ocr, process the value because it tends to drop decimal places, auto binary thresholding, levenshtein distance backup search, stops when boxes are too small, auto threshold selection,  display data from first image next to the matching labels, try splitting data at first number to avoid overreading when blank, batch processing
 
-features wanted: batch processing
+features wanted: 
 
-imageInputElement changes (we have uploaded a new set of things to scan):
-set global image array to array of files
-set results to empty
+problem children at 0.5 scale: 13, 24
 
-when the image array isn't empty:
-do stuff to the first image in it, then remove it
-after each image, add result to the results tracker
-loop
+13: number read failure, ocr just isnt reading it. fixed when resolution scale is 1 instead of 0.5
+can't do this, process too slow at scale 1, workable at 0.75
+
+problems at 0.75: 7, 8, 9, 13
+
+3 had data display pairing issues:: uhhh fixed?? unsure how??? i made a change and then undid it.
+
+errors on:
+4, 7, 9, 13, 18, 22, 0141, 0145, 1455, 1569
+
+4: wrong lavi (1)
+7: couldn't read the e/a
+9: couldn't find e/a
+13: couldn't read averageEe
+18: wrong e/a (3.4)
+22: missing epLateral
+0141: wrong lavi (23.8), slightly off tr velocity (2.55 vs 2.54)
+0145: missing e/a
+1455: wrong averageEe (3.42 vs 8.42)
+1569: slightly off e/a (0.55 vs 0.56)
+
+common types of wrong: read 8 as 3, couldn't read the data
+
+//==//
+answer key:
+
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.05  | averageEe 24.22 | LAVI 26.3  | TRVelocity N/A   | EA 1     | 1.png
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.05  | averageEe 24.22 | LAVI 26.3  | TRVelocity N/A   | EA 1     | 2.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 6.12  | LAVI 22.8  | TRVelocity 2.61  | EA 1.02  | 3.png
+Normal readings                   | epSeptal 0.16  | epLateral 0.14  | averageEe 5.87  | LAVI 22.8  | TRVelocity 2.4   | EA 1.57  | 4.png
+Normal readings                   | epSeptal 0.11  | epLateral 0.14  | averageEe 8.96  | LAVI 34.8  | TRVelocity 3.16  | EA 1.42  | 5.png
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.08  | averageEe 13    | LAVI 39.2  | TRVelocity 2.87  | EA N/A   | 6.png
+Purple zone! human input required | epSeptal 0.05  | epLateral 0.08  | averageEe 7.85  | LAVI 26.9  | TRVelocity 3.02  | EA 0.69  | 7.png
+Purple zone! human input required | epSeptal 0.05  | epLateral 0.06  | averageEe 17.64 | LAVI 36.7  | TRVelocity N/A   | EA 0.92  | 8.png
+Normal readings                   | epSeptal 0.06  | epLateral 0.07  | averageEe 10.31 | LAVI 30.3  | TRVelocity 2.84  | EA 0.89  | 9.png
+Normal readings                   | epSeptal 0.06  | epLateral 0.1   | averageEe 10.38 | LAVI 20    | TRVelocity 2.19  | EA 0.84  | 10.png
+Normal readings                   | epSeptal 0.17  | epLateral 0.32  | averageEe 3.27  | LAVI 20.7  | TRVelocity 2.37  | EA 2     | 11.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 13.88 | LAVI 33.5  | TRVelocity 3.43  | EA 1.27  | 12.png
+Normal readings                   | epSeptal 0.07  | epLateral 0.15  | averageEe 6.27  | LAVI 27.4  | TRVelocity 2.4   | EA 0.91  | 13.png
+Normal readings                   | epSeptal 0.09  | epLateral 0.12  | averageEe 5.9   | LAVI 18.1  | TRVelocity N/A   | EA 1.03  | 14.png
+Normal readings                   | epSeptal 0.11  | epLateral 0.11  | averageEe 7.45  | LAVI 20.2  | TRVelocity 2.78  | EA 0.86  | 15.png
+Normal readings                   | epSeptal 0.06  | epLateral 0.07  | averageEe 13.08 | LAVI 31.9  | TRVelocity 3.06  | EA 0.93  | 16.png
+Purple zone! human input required | epSeptal 0.08  | epLateral 0.08  | averageEe 17.5  | LAVI 43.2  | TRVelocity 2.82  | EA 0.84  | 18.png
+Grade 1                           | epSeptal 0.06  | epLateral 0.07  | averageEe 10.46 | LAVI 30.1  | TRVelocity 1.6   | EA 0.65  | 20.png
+Normal readings                   | epSeptal 0.07  | epLateral 0.06  | averageEe 10.15 | LAVI 17.5  | TRVelocity N/A   | EA 0.85  | 21.png
+Normal readings                   | epSeptal 0.11  | epLateral 0.08  | averageEe 6.95  | LAVI 18    | TRVelocity 2.71  | EA 1.32  | 22.png
+Normal readings                   | epSeptal 0.1   | epLateral 0.15  | averageEe 8.32  | LAVI 45.7  | TRVelocity 2.66  | EA N/A   | 23.png
+Purple zone! human input required | epSeptal 0.06  | epLateral 0.06  | averageEe 19.67 | LAVI 52    | TRVelocity 2.57  | EA 0.76  | 24.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 12.94 | LAVI 34    | TRVelocity 2.89  | EA 1.02  | 25.png
+Normal readings                   | epSeptal 0.08  | epLateral 0.11  | averageEe 10    | LAVI 14.5  | TRVelocity 2.54  | EA 1.22  | IMG_0141.jpg
+Normal readings                   | epSeptal 0.07  | epLateral 0.09  | averageEe 6.62  | LAVI 24.2  | TRVelocity 2.33  | EA 0.62  | IMG_0144.jpg
+Normal readings                   | epSeptal 0.14  | epLateral 0.22  | averageEe 4.61  | LAVI 14.5  | TRVelocity 2.12  | EA 1.6   | IMG_0145.jpg
+Purple zone! human input required | epSeptal 0.07  | epLateral 0.12  | averageEe 8.42  | LAVI 42.5  | TRVelocity 2.8   | EA 2.16  | IMG_1455.jpg
+Purple zone! human input required | epSeptal 0.07  | epLateral 0.08  | averageEe 14.4  | LAVI 23.1  | TRVelocity 2.56  | EA 0.64  | IMG_1456.jpg
+Grade 1                           | epSeptal 0.05  | epLateral 0.06  | averageEe 10.91 | LAVI 46.9  | TRVelocity 1.36  | EA 0.57  | IMG_1457.jpg
+Normal readings                   | epSeptal 0.08  | epLateral 0.09  | averageEe 12    | LAVI 31.3  | TRVelocity 2.86  | EA 1.04  | IMG_1559.jpg
+Purple zone! human input required | epSeptal 0.04  | epLateral 0.07  | averageEe 18.36 | LAVI 40.1  | TRVelocity 2.56  | EA 0.98  | IMG_1568.jpg
+Grade 1                           | epSeptal 0.04  | epLateral 0.05  | averageEe 11.33 | LAVI 27.5  | TRVelocity 2.74  | EA 0.56  | IMG_1569.jpg
+Normal readings                   | epSeptal 0.06  | epLateral 0.07  | averageEe 10.31 | LAVI 30.3  | TRVelocity 2.84  | EA 0.89  | IMG_7381.jpg
+Normal readings                   | epSeptal 0.08  | epLateral 0.11  | averageEe 10    | LAVI 23.8  | TRVelocity 2.55  | EA 1.22  | IMG_0141CROPPED.png
 
 //==//
 
